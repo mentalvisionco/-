@@ -32,7 +32,7 @@ const authenticateToken = (req, res, next) => {
 // Start Server & Connect DB
 setupDB().then(database => {
   db = database;
-  app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+  app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
 }).catch(err => console.error("Database connection failed", err));
 
 // =======================
