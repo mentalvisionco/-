@@ -1,0 +1,111 @@
+document.addEventListener('DOMContentLoaded', async () => {
+  const user = getCurrentUser();
+  if (!user || user.role !== 'admin') {
+    logout();
+    return;
+  }
+
+  // Navigation Setup
+  const views = {
+    dashboard: document.getElementById('viewDashboard'),
+    students: document.getElementById('viewStudents'),
+    lectures: document.getElementById('viewLectures')
+  };
+  const navs = {
+    dashboard: document.getElementById('navDashboard'),
+    students: document.getElementById('navStudents'),
+    lectures: document.getElementById('navLectures')
+  };
+
+  function switchView(viewName) {
+    Object.values(views).forEach(v => v.classList.add('hidden'));
+    Object.values(navs).forEach(n => n.classList.remove('active'));
+    views[viewName].classList.remove('hidden');
+    navs[viewName].classList.add('active');
+  }
+
+  navs.dashboard.addEventListener('click', () => switchView('dashboard'));
+  navs.students.addEventListener('click', () => switchView('students'));
+  navs.lectures.addEventListener('click', () => switchView('lectures'));
+
+  try {
+    // Fetch Data
+    const [students, submissions, lectures] = await Promise.all([
+      apiCall('/admin/students'),
+      apiCall('/admin/submissions'),
+      apiCall('/lectures')
+    ]);
+
+    // Dashboard
+    document.getElementById('totalStudents').textContent = students.length;
+    document.getElementById('totalSubmissions').textContent = submissions.length;
+    const totalExpected = students.length * 10;
+    const avgEng = totalExpected > 0 ? Math.round((submissions.length / totalExpected) * 100) : 0;
+    document.getElementById('avgEngagement').textContent = `${avgEng}%`;
+
+    // Recent Submissions
+    const recentSubmissionsList = document.getElementById('recentSubmissions');
+    if (submissions.length === 0) {
+      recentSubmissionsList.innerHTML = '<p style="color: var(--text-muted)">لا توجد تسليمات حتى الآن.</p>';
+    } else {
+      recentSubmissionsList.innerHTML = '';
+      submissions.slice(0, 5).forEach(sub => {
+        recentSubmissionsList.innerHTML += `
+          <div class="list-item">
+            <div>
+              <h4 style="color: var(--text-main); margin-bottom: 0.25rem;">${sub.studentName} - ${sub.lectureTitle}</h4>
+              <small><a href="${sub.fileUrl}" target="_blank" style="color: var(--primary)">عرض الملف المسلم</a></small>
+            </div>
+            <button class="btn" style="width: auto; padding: 0.5rem 1rem; background-color: var(--success);" onclick="alert('تم تقييم المهمة')">تقييم</button>
+          </div>
+        `;
+      });
+    }
+
+    // Students Table
+    const tbody = document.getElementById('studentsTableBody');
+    tbody.innerHTML = '';
+    students.forEach(student => {
+      const score = (student.submissionsCount * 10) + (student.points || 0);
+      let scoreBadge = 'danger';
+      if (score >= 100) scoreBadge = 'success';
+      else if (score >= 50) scoreBadge = 'warning';
+
+      tbody.innerHTML += `
+        <tr style="border-bottom: 1px solid var(--border);">
+          <td style="padding: 1rem;">${student.name}</td>
+          <td style="padding: 1rem; color: var(--text-muted);">${student.email}</td>
+          <td style="padding: 1rem;">${student.points || 0}</td>
+          <td style="padding: 1rem;">${student.submissionsCount} / 10</td>
+          <td style="padding: 1rem;"><span class="badge ${scoreBadge}">${score} نقطة</span></td>
+        </tr>
+      `;
+    });
+
+    // Lectures
+    const list = document.getElementById('adminLecturesList');
+    list.innerHTML = '';
+    let allLecs = [...lectures];
+    if (allLecs.length < 10) {
+      for (let i = allLecs.length + 1; i <= 10; i++) {
+        allLecs.push({ id: i, title: `المحاضرة رقم ${i}`, description: 'محتوى قريباً...', order: i, isDummy: true });
+      }
+    }
+    allLecs.forEach(lec => {
+      list.innerHTML += `
+        <div class="list-item">
+          <div>
+            <h4 style="color: var(--text-main); margin-bottom: 0.25rem;">${lec.title}</h4>
+            <small>${lec.description}</small>
+          </div>
+          <div>
+            <button class="btn" style="width: auto; padding: 0.5rem 1rem; background-color: var(--warning); color: #000;">تعديل</button>
+          </div>
+        </div>
+      `;
+    });
+
+  } catch (error) {
+    showToast('خطأ في جلب بيانات الإدارة', 'error');
+  }
+});

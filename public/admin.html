@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LMS - لوحة تحكم الإدارة</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  
+  <div class="dashboard">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">🚀 إدارة المنصة</div>
+      <ul class="nav-links">
+        <li class="nav-item"><a href="#" class="nav-link active" id="navDashboard">نظرة عامة</a></li>
+        <li class="nav-item"><a href="#" class="nav-link" id="navStudents">الطلاب</a></li>
+        <li class="nav-item"><a href="#" class="nav-link" id="navLectures">إدارة المحاضرات</a></li>
+      </ul>
+      <div style="margin-top: auto;">
+        <button class="btn" style="background-color: var(--danger);" onclick="logout()">تسجيل خروج</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <header class="header">
+        <div>
+          <h2>لوحة الإدارة</h2>
+          <p>متابعة أداء الطلاب والتقييمات</p>
+        </div>
+        <div class="user-profile">
+          <div class="avatar" style="background-color: var(--danger);">أ</div>
+        </div>
+      </header>
+
+      <!-- View: Dashboard -->
+      <section id="viewDashboard">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <h3>إجمالي الطلاب</h3>
+            <div class="value" id="totalStudents">0</div>
+          </div>
+          <div class="stat-card">
+            <h3>إجمالي التسليمات</h3>
+            <div class="value" id="totalSubmissions">0</div>
+          </div>
+          <div class="stat-card">
+            <h3>متوسط التفاعل</h3>
+            <div class="value" id="avgEngagement">0%</div>
+          </div>
+        </div>
+
+        <div style="margin-top: 2rem;">
+          <h3>أحدث التسليمات (Tasks)</h3>
+          <div class="list-group" id="recentSubmissions" style="margin-top: 1rem;">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- View: Students -->
+      <section id="viewStudents" class="hidden">
+        <h3>قائمة المتدربين (التقييم التلقائي)</h3>
+        <p style="margin-bottom: 1rem;">حساب الـ Score بناءً على الحضور والتسليم</p>
+        
+        <table style="width: 100%; text-align: right; border-collapse: collapse; margin-top: 1rem;">
+          <thead>
+            <tr style="border-bottom: 1px solid var(--border);">
+              <th style="padding: 1rem;">الاسم</th>
+              <th style="padding: 1rem;">البريد الإلكتروني</th>
+              <th style="padding: 1rem;">النقاط</th>
+              <th style="padding: 1rem;">التسليمات</th>
+              <th style="padding: 1rem;">الـ Score النهائي</th>
+            </tr>
+          </thead>
+          <tbody id="studentsTableBody">
+            <!-- Populated via JS -->
+          </tbody>
+        </table>
+      </section>
+      
+      <!-- View: Lectures -->
+      <section id="viewLectures" class="hidden">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+          <h3>إدارة المحاضرات (10 محاضرات)</h3>
+          <button class="btn" style="width: auto;" onclick="alert('سيتم إضافة نافذة الإضافة قريباً')">+ إضافة محاضرة</button>
+        </div>
+        <div class="list-group" id="adminLecturesList">
+          <!-- Populated via JS -->
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <div id="toast" class="toast">رسالة النظام</div>
+
+  <script src="js/db.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

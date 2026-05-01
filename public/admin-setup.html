@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>إنشاء حسابات الإدارة المخفية</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="auth-wrapper">
+    <div class="auth-card">
+      <div class="auth-header">
+        <h1>إضافة مدير (Admin)</h1>
+        <p>استخدم هذه الصفحة لإنشاء الـ 3 حسابات للإدارة</p>
+      </div>
+      <form id="adminRegForm">
+        <div class="form-group">
+          <label>اسم المدير</label>
+          <input type="text" id="regName" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label>البريد الإلكتروني</label>
+          <input type="email" id="regEmail" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label>كلمة المرور</label>
+          <input type="password" id="regPassword" class="form-control" required>
+        </div>
+        <!-- This sets the role to admin -->
+        <input type="hidden" id="regRole" value="admin">
+        
+        <button type="submit" class="btn" style="background-color: var(--warning); color: black;">تسجيل كمدير</button>
+      </form>
+      <div style="margin-top: 1rem; text-align: center;">
+        <a href="index.html" style="color: var(--primary); text-decoration: underline;">الرجوع للرئيسية</a>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast">رسالة النظام</div>
+
+  <script src="js/db.js"></script>
+  <script>
+    document.getElementById('adminRegForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('regName').value;
+      const email = document.getElementById('regEmail').value;
+      const password = document.getElementById('regPassword').value;
+      const role = document.getElementById('regRole').value;
+
+      try {
+        const data = await apiCall('/register', 'POST', { name, email, password, role });
+        showToast('تم تسجيل حساب المدير بنجاح!', 'success');
+        
+        // Reset form for the next admin
+        document.getElementById('adminRegForm').reset();
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    });
+  </script>
+</body>
+</html>
