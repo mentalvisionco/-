@@ -29,11 +29,19 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Start Server & Connect DB
-setupDB().then(database => {
-  db = database;
-  app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
-}).catch(err => console.error("Database connection failed", err));
+// Start Server IMMEDIATELY for Railway health check
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+  
+  // Connect DB after server starts
+  setupDB().then(database => {
+    db = database;
+    console.log("Database connected successfully!");
+  }).catch(err => {
+    console.error("Database connection failed", err);
+    process.exit(1);
+  });
+});
 
 // =======================
 // مسارات المصادقة (Auth Routes)
