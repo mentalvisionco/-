@@ -157,12 +157,17 @@ function dbAll(sql, params = []) {
 // استعلام تنفيذي (INSERT, UPDATE, DELETE)
 function dbRun(sql, params = []) {
   db.run(sql, params);
+  
+  const lastInsertRowid = db.exec('SELECT last_insert_rowid()')[0].values[0][0];
+  const changes = db.getRowsModified();
+  
   // حفظ البيانات بعد كل تغيير
   const dbPath = process.env.DB_PATH || path.join(__dirname, 'database.sqlite');
   saveDB(dbPath);
+  
   return {
-    lastInsertRowid: db.exec('SELECT last_insert_rowid()')[0].values[0][0],
-    changes: db.getRowsModified()
+    lastInsertRowid,
+    changes
   };
 }
 
