@@ -4,30 +4,31 @@
    Design Tokens
    ================================ */
 :root {
-  --surface-0: #faf8f5;
-  --surface-1: #ffffff;
-  --surface-2: #f2eeea;
-  --surface-3: #e8e3dd;
+  /* Mental Vision Dark Theme */
+  --surface-0: #0A1C23;
+  --surface-1: #112832;
+  --surface-2: #183542;
+  --surface-3: #204454;
 
-  --ink: #1a1714;
-  --ink-soft: #4a4540;
-  --ink-muted: #8a847d;
-  --ink-ghost: #b5b0a9;
+  --ink: #FFFFFF;
+  --ink-soft: #E2EAEF;
+  --ink-muted: #9BAEBA;
+  --ink-ghost: #647B88;
 
-  --accent: #e85d3a;
-  --accent-hover: #d14e2d;
-  --accent-soft: rgba(232, 93, 58, 0.08);
-  --accent-mid: rgba(232, 93, 58, 0.15);
+  --accent: #86C466; /* Mental Vision Green */
+  --accent-hover: #97D278;
+  --accent-soft: rgba(134, 196, 102, 0.15);
+  --accent-mid: rgba(134, 196, 102, 0.3);
 
-  --indigo: #4a5899;
-  --indigo-soft: rgba(74, 88, 153, 0.08);
+  --indigo: #5C73C4;
+  --indigo-soft: rgba(92, 115, 196, 0.15);
 
-  --green: #3d8b5e;
-  --green-soft: rgba(61, 139, 94, 0.1);
-  --red: #c9453a;
-  --red-soft: rgba(201, 69, 58, 0.1);
-  --amber: #c08b30;
-  --amber-soft: rgba(192, 139, 48, 0.1);
+  --green: #86C466;
+  --green-soft: rgba(134, 196, 102, 0.15);
+  --red: #E05246;
+  --red-soft: rgba(224, 82, 70, 0.15);
+  --amber: #DDAA3A;
+  --amber-soft: rgba(221, 170, 58, 0.15);
 
   --radius-sm: 6px;
   --radius: 10px;
@@ -172,6 +173,13 @@ small {
   font-weight: 700;
   color: var(--ink);
   margin-bottom: 0.4rem;
+}
+
+.logo-img {
+  max-width: 200px;
+  height: auto;
+  margin: 0 auto 1.5rem auto;
+  display: block;
 }
 
 .auth-header p {
@@ -329,12 +337,15 @@ small {
 }
 
 .brand {
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: var(--ink);
+  display: flex;
+  align-items: center;
   margin-bottom: 2.5rem;
   padding: 0 0.75rem;
-  letter-spacing: -0.02em;
+}
+
+.brand .logo-img {
+  max-width: 140px;
+  margin: 0;
 }
 
 .nav-links {

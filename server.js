@@ -15,7 +15,6 @@ const SECRET_KEY = process.env.SECRET_KEY || 'lms_super_secret_key_123';
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
 
 // ==============================
 // Rate Limiting بسيط
@@ -295,10 +294,10 @@ app.get('/api/admin/students', authenticateToken, (req, res) => {
 });
 
 // ==============================
-// Catch-all: serve index.html
+// 404 Route
 // ==============================
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+app.use((req, res) => {
+  res.status(404).json({ error: 'Endpoint not found' });
 });
 
 // ==============================
