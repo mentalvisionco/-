@@ -3,22 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LMS - لوحة تحكم الإدارة</title>
+  <meta name="description" content="لوحة تحكم الإدارة - متابعة الطلاب والتسليمات وإدارة المحاضرات">
+  <title>Tadreeb — لوحة الإدارة</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  
+
   <div class="dashboard">
     <!-- Sidebar -->
     <aside class="sidebar">
-      <div class="brand">🚀 إدارة المنصة</div>
+      <div class="brand">Tadreeb</div>
       <ul class="nav-links">
         <li class="nav-item"><a href="#" class="nav-link active" id="navDashboard">نظرة عامة</a></li>
         <li class="nav-item"><a href="#" class="nav-link" id="navStudents">الطلاب</a></li>
-        <li class="nav-item"><a href="#" class="nav-link" id="navLectures">إدارة المحاضرات</a></li>
+        <li class="nav-item"><a href="#" class="nav-link" id="navLectures">المحاضرات</a></li>
       </ul>
       <div style="margin-top: auto;">
-        <button class="btn" style="background-color: var(--danger);" onclick="logout()">تسجيل خروج</button>
+        <button class="btn" style="background: var(--red); font-size: 0.85rem;" onclick="logout()">خروج</button>
       </div>
     </aside>
 
@@ -30,64 +31,66 @@
           <p>متابعة أداء الطلاب والتقييمات</p>
         </div>
         <div class="user-profile">
-          <div class="avatar" style="background-color: var(--danger);">أ</div>
+          <div class="avatar" style="background: var(--indigo);">أ</div>
         </div>
       </header>
 
-      <!-- View: Dashboard -->
+      <!-- Dashboard View -->
       <section id="viewDashboard">
         <div class="stats-grid">
           <div class="stat-card">
-            <h3>إجمالي الطلاب</h3>
+            <h3>الطلاب</h3>
             <div class="value" id="totalStudents">0</div>
           </div>
           <div class="stat-card">
-            <h3>إجمالي التسليمات</h3>
+            <h3>التسليمات</h3>
             <div class="value" id="totalSubmissions">0</div>
           </div>
           <div class="stat-card">
-            <h3>متوسط التفاعل</h3>
+            <h3>التفاعل</h3>
             <div class="value" id="avgEngagement">0%</div>
           </div>
         </div>
 
-        <div style="margin-top: 2rem;">
-          <h3>أحدث التسليمات (Tasks)</h3>
-          <div class="list-group" id="recentSubmissions" style="margin-top: 1rem;">
-            <!-- Populated via JS -->
+        <div style="margin-top: 1.5rem;">
+          <h3>أحدث التسليمات</h3>
+          <div class="list-group" id="recentSubmissions" style="margin-top: 0.85rem;">
+            <div class="loading">جاري تحميل البيانات...</div>
           </div>
         </div>
       </section>
 
-      <!-- View: Students -->
+      <!-- Students View -->
       <section id="viewStudents" class="hidden">
-        <h3>قائمة المتدربين (التقييم التلقائي)</h3>
-        <p style="margin-bottom: 1rem;">حساب الـ Score بناءً على الحضور والتسليم</p>
-        
-        <table style="width: 100%; text-align: right; border-collapse: collapse; margin-top: 1rem;">
-          <thead>
-            <tr style="border-bottom: 1px solid var(--border);">
-              <th style="padding: 1rem;">الاسم</th>
-              <th style="padding: 1rem;">البريد الإلكتروني</th>
-              <th style="padding: 1rem;">النقاط</th>
-              <th style="padding: 1rem;">التسليمات</th>
-              <th style="padding: 1rem;">الـ Score النهائي</th>
-            </tr>
-          </thead>
-          <tbody id="studentsTableBody">
-            <!-- Populated via JS -->
-          </tbody>
-        </table>
+        <h3>قائمة المتدربين</h3>
+        <p style="margin-bottom: 1.25rem;">حساب التقييم بناءً على الحضور والتسليم</p>
+
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>الاسم</th>
+                <th>البريد</th>
+                <th>النقاط</th>
+                <th>التسليمات</th>
+                <th>التقييم</th>
+              </tr>
+            </thead>
+            <tbody id="studentsTableBody">
+              <tr><td colspan="5" class="loading">جاري تحميل البيانات...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </section>
-      
-      <!-- View: Lectures -->
+
+      <!-- Lectures View -->
       <section id="viewLectures" class="hidden">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-          <h3>إدارة المحاضرات (10 محاضرات)</h3>
-          <button class="btn" style="width: auto;" onclick="alert('سيتم إضافة نافذة الإضافة قريباً')">+ إضافة محاضرة</button>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;">
+          <h3>إدارة المحاضرات</h3>
+          <button class="btn" style="width: auto; font-size: 0.85rem;" onclick="alert('سيتم إضافة نافذة الإضافة قريباً')">+ إضافة محاضرة</button>
         </div>
         <div class="list-group" id="adminLecturesList">
-          <!-- Populated via JS -->
+          <div class="loading">جاري تحميل المحاضرات...</div>
         </div>
       </section>
 
