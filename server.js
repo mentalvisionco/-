@@ -11,6 +11,10 @@ const { setupDB, dbGet, dbAll, dbRun } = require('./database');
 const app = express();
 const PORT = process.env.PORT || 5000;
 const SECRET_KEY = process.env.SECRET_KEY || 'lms_super_secret_key_123';
+if (!process.env.SECRET_KEY && process.env.NODE_ENV === 'production') {
+  console.error('FATAL ERROR: SECRET_KEY is not defined.');
+  process.exit(1);
+}
 
 // Middleware
 app.use(cors());
@@ -18,37 +22,18 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ==============================
-// Rate Limiting بسيط
+// Rate Limiting
 // ==============================
-const rateLimitMap = new Map();
-const RATE_LIMIT_WINDOW = 60000; // 1 minute
-const RATE_LIMIT_MAX = 60; // 60 requests per minute
+const rateLimit = require('express-rate-limit');
+app.set('trust proxy', 1);
 
-function rateLimit(req, res, next) {
-  const ip = req.ip || req.connection.remoteAddress;
-  const now = Date.now();
-  
-  if (!rateLimitMap.has(ip)) {
-    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
-    return next();
-  }
-  
-  const record = rateLimitMap.get(ip);
-  if (now > record.resetTime) {
-    record.count = 1;
-    record.resetTime = now + RATE_LIMIT_WINDOW;
-    return next();
-  }
-  
-  record.count++;
-  if (record.count > RATE_LIMIT_MAX) {
-    return res.status(429).json({ error: 'طلبات كثيرة جداً، حاول بعد قليل' });
-  }
-  
-  next();
-}
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60,
+  message: { error: 'طلبات كثيرة جداً، حاول بعد قليل' }
+});
 
-app.use('/api', rateLimit);
+app.use('/api', apiLimiter);
 
 // ==============================
 // Health Check (مطلوب لـ Railway)
@@ -102,7 +87,7 @@ app.post('/api/register', (req, res) => {
     const name = sanitize(req.body.name);
     const email = sanitize(req.body.email);
     const password = req.body.password;
-    const role = req.body.role === 'admin' ? 'admin' : 'student';
+    const role = 'student'; // Security Fix: Force student role
 
     // Validation
     if (!name || name.length < 2) {
@@ -111,8 +96,8 @@ app.post('/api/register', (req, res) => {
     if (!email || !isValidEmail(email)) {
       return res.status(400).json({ error: 'بريد إلكتروني غير صالح' });
     }
-    if (!password || password.length < 3) {
-      return res.status(400).json({ error: 'كلمة المرور مطلوبة (3 أحرف على الأقل)' });
+    if (!password || password.length < 8) {
+      return res.status(400).json({ error: 'كلمة المرور مطلوبة (8 أحرف على الأقل)' });
     }
 
     // Check existing
@@ -210,6 +195,9 @@ app.post('/api/submissions', authenticateToken, (req, res) => {
     if (!fileUrl) {
       return res.status(400).json({ error: 'رابط الملف مطلوب' });
     }
+    if (!fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
+      return res.status(400).json({ error: 'رابط الملف غير صالح' });
+    }
 
     // التحقق من وجود المحاضرة
     const lecture = dbGet('SELECT id FROM lectures WHERE id = ?', [lectureId]);
@@ -290,6 +278,55 @@ app.get('/api/admin/students', authenticateToken, (req, res) => {
     res.json(students);
   } catch (error) {
     console.error('Admin students error:', error.message);
+    res.status(500).json({ error: 'حدث خطأ' });
+  }
+});
+
+app.post('/api/admin/lectures', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
+  }
+  try {
+    const { title, description, videoUrl } = req.body;
+    if (!title || !videoUrl) return res.status(400).json({ error: 'العنوان ورابط الفيديو مطلوبان' });
+    
+    const count = dbGet('SELECT COUNT(*) as c FROM lectures').c || 0;
+    dbRun('INSERT INTO lectures (title, description, videoUrl, orderNum) VALUES (?, ?, ?, ?)', 
+      [sanitize(title), sanitize(description), sanitize(videoUrl), count + 1]);
+    
+    res.json({ message: 'تمت إضافة المحاضرة بنجاح' });
+  } catch (err) {
+    res.status(500).json({ error: 'حدث خطأ' });
+  }
+});
+
+app.put('/api/admin/lectures/:id', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'غير مصرح' });
+  try {
+    const { title, description, videoUrl } = req.body;
+    dbRun('UPDATE lectures SET title = ?, description = ?, videoUrl = ? WHERE id = ?',
+      [sanitize(title), sanitize(description), sanitize(videoUrl), req.params.id]);
+    res.json({ message: 'تم التعديل بنجاح' });
+  } catch (err) {
+    res.status(500).json({ error: 'حدث خطأ' });
+  }
+});
+
+app.post('/api/lectures/:id/rate', authenticateToken, (req, res) => {
+  if (req.user.role !== 'student') return res.status(403).json({ error: 'للطلاب فقط' });
+  try {
+    const rating = parseInt(req.body.rating);
+    const lectureId = req.params.id;
+    if (rating < 1 || rating > 5) return res.status(400).json({ error: 'التقييم يجب أن يكون من 1 لـ 5' });
+    
+    const existing = dbGet('SELECT id FROM ratings WHERE userId = ? AND lectureId = ?', [req.user.id, lectureId]);
+    if (existing) {
+      dbRun('UPDATE ratings SET rating = ? WHERE id = ?', [rating, existing.id]);
+    } else {
+      dbRun('INSERT INTO ratings (userId, lectureId, rating) VALUES (?, ?, ?)', [req.user.id, lectureId, rating]);
+    }
+    res.json({ message: 'تم حفظ التقييم' });
+  } catch (err) {
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });

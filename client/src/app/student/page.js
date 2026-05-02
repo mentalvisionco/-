@@ -13,6 +13,7 @@ export default function StudentDashboard() {
   const [activeLecture, setActiveLecture] = useState(null);
   const [taskUrl, setTaskUrl] = useState('');
   const [loading, setLoading] = useState(true);
+  const [currentRating, setCurrentRating] = useState(0);
 
   useEffect(() => {
     const currentUser = getCurrentUser();
@@ -56,6 +57,17 @@ export default function StudentDashboard() {
     const existingSub = submissions.find(s => s.lectureId === id);
     setTaskUrl(existingSub ? existingSub.fileUrl : '');
     setCurrentView('singleLecture');
+    setCurrentRating(0); // Reset rating visually for new lecture
+  };
+
+  const handleRating = async (star) => {
+    try {
+      await apiCall(`/lectures/${activeLecture.id}/rate`, 'POST', { rating: star });
+      setCurrentRating(star);
+      showToast('تم حفظ التقييم، شكراً لك!', 'success');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
   };
 
   const handleTaskSubmit = async (e) => {
@@ -227,8 +239,12 @@ export default function StudentDashboard() {
               <h2>{activeLecture.title}</h2>
               <p style={{ marginBottom: '1.5rem' }}>{activeLecture.description || ''}</p>
 
-              <div style={{ width: '100%', height: '360px', background: 'var(--surface-2)', borderRadius: 'var(--radius)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '2rem', border: '1px solid var(--surface-3)' }}>
-                <span style={{ color: 'var(--ink-muted)', fontSize: '0.95rem' }}>▶ منطقة عرض الفيديو</span>
+              <div style={{ width: '100%', height: '360px', background: '#000', borderRadius: 'var(--radius)', overflow: 'hidden', marginBottom: '2rem', border: '1px solid var(--surface-3)' }}>
+                {activeLecture.videoUrl && activeLecture.videoUrl.includes('youtube.com') ? (
+                  <iframe width="100%" height="100%" src={activeLecture.videoUrl.replace('watch?v=', 'embed/')} frameBorder="0" allowFullScreen></iframe>
+                ) : (
+                  <video src={activeLecture.videoUrl} controls style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                )}
               </div>
 
               <div style={{ borderTop: '1px solid var(--surface-3)', paddingTop: '1.5rem' }}>
@@ -253,7 +269,14 @@ export default function StudentDashboard() {
                 <h3>تقييم المحاضرة</h3>
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.85rem', fontSize: '1.5rem', cursor: 'pointer' }}>
                   {[1, 2, 3, 4, 5].map(star => (
-                    <span key={star} className="star">☆</span>
+                    <span 
+                      key={star} 
+                      className="star" 
+                      onClick={() => handleRating(star)}
+                      style={{ color: star <= currentRating ? 'var(--amber)' : 'var(--ink-ghost)' }}
+                    >
+                      {star <= currentRating ? '★' : '☆'}
+                    </span>
                   ))}
                 </div>
               </div>

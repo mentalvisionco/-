@@ -107,9 +107,9 @@ export default function AuthPage() {
           </form>
           <div className="auth-switch">
             ليس لديك حساب؟{' '}
-            <a href="#" onClick={(e) => { e.preventDefault(); setIsLogin(false); }}>
+            <button type="button" className="link-button" onClick={() => setIsLogin(false)}>
               أنشئ واحدًا
-            </a>
+            </button>
           </div>
         </div>
       ) : (
@@ -160,9 +160,9 @@ export default function AuthPage() {
           </form>
           <div className="auth-switch">
             لديك حساب بالفعل؟{' '}
-            <a href="#" onClick={(e) => { e.preventDefault(); setIsLogin(true); }}>
+            <button type="button" className="link-button" onClick={() => setIsLogin(true)}>
               سجّل الدخول
-            </a>
+            </button>
           </div>
         </div>
       )}

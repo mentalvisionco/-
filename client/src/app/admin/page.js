@@ -14,6 +14,45 @@ export default function AdminDashboard() {
   const [submissions, setSubmissions] = useState([]);
   const [lectures, setLectures] = useState([]);
 
+  const [showLectureForm, setShowLectureForm] = useState(false);
+  const [editLectureId, setEditLectureId] = useState(null);
+  const [formTitle, setFormTitle] = useState('');
+  const [formDesc, setFormDesc] = useState('');
+  const [formVideoUrl, setFormVideoUrl] = useState('');
+
+  const openAddForm = () => {
+    setEditLectureId(null);
+    setFormTitle('');
+    setFormDesc('');
+    setFormVideoUrl('');
+    setShowLectureForm(true);
+  };
+
+  const openEditForm = (lec) => {
+    setEditLectureId(lec.id);
+    setFormTitle(lec.title);
+    setFormDesc(lec.description || '');
+    setFormVideoUrl(lec.videoUrl || '');
+    setShowLectureForm(true);
+  };
+
+  const handleSaveLecture = async (e) => {
+    e.preventDefault();
+    try {
+      if (editLectureId) {
+        await apiCall(`/admin/lectures/${editLectureId}`, 'PUT', { title: formTitle, description: formDesc, videoUrl: formVideoUrl });
+        showToast('تم التعديل بنجاح', 'success');
+      } else {
+        await apiCall('/admin/lectures', 'POST', { title: formTitle, description: formDesc, videoUrl: formVideoUrl });
+        showToast('تمت الإضافة بنجاح', 'success');
+      }
+      setShowLectureForm(false);
+      fetchData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
   useEffect(() => {
     const currentUser = getCurrentUser();
     if (!currentUser || currentUser.role !== 'admin') {
@@ -131,7 +170,7 @@ export default function AdminDashboard() {
                       <div>
                         <h4>{sub.studentName} - {sub.lectureTitle}</h4>
                         <small>
-                          <a href={sub.fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
+                          <a href={sub.fileUrl.startsWith('http') ? sub.fileUrl : '#'} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
                             عرض الملف المسلم
                           </a>
                         </small>
@@ -201,11 +240,36 @@ export default function AdminDashboard() {
               <button 
                 className="btn" 
                 style={{ width: 'auto', fontSize: '0.85rem' }} 
-                onClick={() => alert('سيتم إضافة نافذة الإضافة قريباً')}
+                onClick={openAddForm}
               >
                 + إضافة محاضرة
               </button>
             </div>
+            
+            {showLectureForm && (
+              <div className="stat-card" style={{ marginBottom: '1.5rem' }}>
+                <h4>{editLectureId ? 'تعديل المحاضرة' : 'إضافة محاضرة جديدة'}</h4>
+                <form onSubmit={handleSaveLecture} style={{ marginTop: '1rem' }}>
+                  <div className="form-group">
+                    <label>عنوان المحاضرة</label>
+                    <input type="text" className="form-control" required value={formTitle} onChange={e => setFormTitle(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>الوصف</label>
+                    <input type="text" className="form-control" value={formDesc} onChange={e => setFormDesc(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>رابط الفيديو</label>
+                    <input type="text" className="form-control" required value={formVideoUrl} onChange={e => setFormVideoUrl(e.target.value)} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '1rem' }}>
+                    <button type="submit" className="btn">حفظ</button>
+                    <button type="button" className="btn" style={{ background: 'var(--surface-3)' }} onClick={() => setShowLectureForm(false)}>إلغاء</button>
+                  </div>
+                </form>
+              </div>
+            )}
+
             <div className="list-group">
               {lectures.length === 0 ? (
                 <p style={{ color: 'var(--ink-muted)', padding: '1rem' }}>لا توجد محاضرات. أضف محاضرة جديدة.</p>
@@ -217,7 +281,7 @@ export default function AdminDashboard() {
                       <small>{lec.description || ''}</small>
                     </div>
                     <div>
-                      <button className="btn" style={{ width: 'auto', padding: '0.45rem 0.85rem', background: 'var(--indigo)', fontSize: '0.82rem' }}>
+                      <button className="btn" style={{ width: 'auto', padding: '0.45rem 0.85rem', background: 'var(--indigo)', fontSize: '0.82rem' }} onClick={() => openEditForm(lec)}>
                         تعديل
                       </button>
                     </div>
