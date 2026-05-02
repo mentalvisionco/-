@@ -48,15 +48,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Recent Submissions
     const recentSubmissionsList = document.getElementById('recentSubmissions');
     if (submissions.length === 0) {
-      recentSubmissionsList.innerHTML = '<p style="color: var(--text-muted); padding: 1rem;">لا توجد تسليمات حتى الآن.</p>';
+      recentSubmissionsList.innerHTML = '<p style="color: var(--ink-muted); padding: 1rem;">لا توجد تسليمات حتى الآن.</p>';
     } else {
       recentSubmissionsList.innerHTML = '';
       submissions.slice(0, 5).forEach(sub => {
         recentSubmissionsList.innerHTML += `
           <div class="list-item">
             <div>
-              <h4 style="color: var(--text-main); margin-bottom: 0.25rem;">${sub.studentName} - ${sub.lectureTitle}</h4>
-              <small><a href="${sub.fileUrl}" target="_blank" rel="noopener" style="color: var(--primary)">عرض الملف المسلم</a></small>
+              <h4>${sub.studentName} - ${sub.lectureTitle}</h4>
+              <small><a href="${sub.fileUrl}" target="_blank" rel="noopener" style="color: var(--accent)">عرض الملف المسلم</a></small>
             </div>
             <span class="badge success">تم التسليم</span>
           </div>
@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Students Table
     const tbody = document.getElementById('studentsTableBody');
     if (students.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" style="padding: 2rem; color: var(--text-muted); text-align: center;">لا يوجد طلاب مسجلين حتى الآن.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="padding: 2rem; color: var(--ink-muted); text-align: center;">لا يوجد طلاب مسجلين حتى الآن.</td></tr>';
     } else {
       tbody.innerHTML = '';
       students.forEach(student => {
@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         tbody.innerHTML += `
           <tr>
             <td>${student.name}</td>
-            <td style="color: var(--text-muted);">${student.email}</td>
+            <td style="color: var(--ink-muted);">${student.email}</td>
             <td>${student.points || 0}</td>
             <td>${student.submissionsCount} / ${totalLectures}</td>
             <td><span class="badge ${scoreBadge}">${score} نقطة</span></td>
@@ -91,18 +91,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Lectures Management
     const list = document.getElementById('adminLecturesList');
     if (lectures.length === 0) {
-      list.innerHTML = '<p style="color: var(--text-muted); padding: 1rem;">لا توجد محاضرات. أضف محاضرة جديدة.</p>';
+      list.innerHTML = '<p style="color: var(--ink-muted); padding: 1rem;">لا توجد محاضرات. أضف محاضرة جديدة.</p>';
     } else {
       list.innerHTML = '';
       lectures.forEach(lec => {
         list.innerHTML += `
           <div class="list-item">
             <div>
-              <h4 style="color: var(--text-main); margin-bottom: 0.25rem;">${lec.title}</h4>
+              <h4>${lec.title}</h4>
               <small>${lec.description || ''}</small>
             </div>
             <div>
-              <button class="btn" style="width: auto; padding: 0.5rem 1rem; background: linear-gradient(135deg, var(--warning), #d97706); color: #000;">تعديل</button>
+              <button class="btn" style="width: auto; padding: 0.45rem 0.85rem; background: var(--indigo); font-size: 0.82rem;">تعديل</button>
             </div>
           </div>
         `;

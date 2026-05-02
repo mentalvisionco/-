@@ -75,7 +75,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const list = document.getElementById('recentLecturesList');
     
     if (lectures.length === 0) {
-      list.innerHTML = '<p style="color: var(--text-muted); padding: 1rem;">لا توجد محاضرات متاحة حالياً.</p>';
+      list.innerHTML = '<p style="color: var(--ink-muted); padding: 1rem;">لا توجد محاضرات متاحة حالياً.</p>';
       return;
     }
 
@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       list.innerHTML += `
         <div class="list-item" onclick="openLecture(${lec.id})">
           <div>
-            <h4 style="color: var(--text-main); margin-bottom: 0.25rem;">${lec.title}</h4>
+            <h4>${lec.title}</h4>
             <small>${lec.description || ''}</small>
           </div>
           <span class="badge ${isCompleted ? 'success' : 'warning'}">${isCompleted ? 'مكتملة' : 'قيد الانتظار'}</span>
@@ -98,7 +98,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const list = document.getElementById('allLecturesList');
     
     if (lectures.length === 0) {
-      list.innerHTML = '<p style="color: var(--text-muted); padding: 1rem;">لا توجد محاضرات متاحة حالياً.</p>';
+      list.innerHTML = '<p style="color: var(--ink-muted); padding: 1rem;">لا توجد محاضرات متاحة حالياً.</p>';
       return;
     }
 
@@ -108,7 +108,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       list.innerHTML += `
         <div class="list-item" onclick="openLecture(${lec.id})">
           <div>
-            <h4 style="color: var(--text-main); margin-bottom: 0.25rem;">${lec.title}</h4>
+            <h4>${lec.title}</h4>
             <small>${lec.description || ''}</small>
           </div>
           <span class="badge ${isCompleted ? 'success' : 'danger'}">${isCompleted ? 'تم التسليم' : 'لم يتم التسليم'}</span>

@@ -4,22 +4,22 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="لوحة تحكم الطالب - تابع المحاضرات وسلّم المهام واكسب النقاط">
-  <title>LMS - لوحة الطالب</title>
+  <title>Tadreeb — لوحة الطالب</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  
+
   <div class="dashboard">
     <!-- Sidebar -->
     <aside class="sidebar">
-      <div class="brand">🚀 منصة التدريب</div>
+      <div class="brand">Tadreeb</div>
       <ul class="nav-links">
         <li class="nav-item"><a href="#" class="nav-link active" id="navHome">الرئيسية</a></li>
         <li class="nav-item"><a href="#" class="nav-link" id="navLectures">المحاضرات</a></li>
         <li class="nav-item"><a href="#" class="nav-link" id="navTasks">المهام</a></li>
       </ul>
       <div style="margin-top: auto;">
-        <button class="btn" style="background: linear-gradient(135deg, var(--danger), #dc2626);" onclick="logout()">تسجيل خروج</button>
+        <button class="btn" style="background: var(--red); font-size: 0.85rem;" onclick="logout()">خروج</button>
       </div>
     </aside>
 
@@ -27,80 +27,80 @@
     <main class="main-content">
       <header class="header">
         <div>
-          <h2 id="welcomeMsg">مرحباً بك!</h2>
-          <p>تابع تقدمك واستكمل مسيرتك التدريبية</p>
+          <h2 id="welcomeMsg">مرحبًا!</h2>
+          <p>تابع تقدّمك في المسار التدريبي</p>
         </div>
         <div class="user-profile">
           <div class="points-display">
-            ⭐ <span id="userPoints">0</span> نقطة
+            <span id="userPoints">0</span> نقطة
           </div>
           <div class="avatar" id="userAvatar">ط</div>
         </div>
       </header>
 
-      <!-- View: Home -->
+      <!-- Home View -->
       <section id="viewHome">
         <div class="stats-grid">
           <div class="stat-card">
-            <h3>نسبة الإنجاز</h3>
+            <h3>الإنجاز</h3>
             <div class="value" id="progressVal">0%</div>
             <div class="progress-container">
               <div class="progress-bar" id="progressBar" style="width: 0%"></div>
             </div>
           </div>
           <div class="stat-card">
-            <h3>المحاضرات المنجزة</h3>
+            <h3>المحاضرات</h3>
             <div class="value" id="lecturesCompleted">0 / 0</div>
           </div>
           <div class="stat-card">
-            <h3>المهام المسلمة</h3>
+            <h3>التسليمات</h3>
             <div class="value" id="tasksSubmitted">0</div>
           </div>
         </div>
 
-        <div style="margin-top: 2rem;">
+        <div style="margin-top: 1.5rem;">
           <h3>أحدث المحاضرات</h3>
-          <div class="list-group" id="recentLecturesList" style="margin-top: 1rem;">
+          <div class="list-group" id="recentLecturesList" style="margin-top: 0.85rem;">
             <div class="loading">جاري تحميل البيانات...</div>
           </div>
         </div>
       </section>
 
-      <!-- View: Lectures -->
+      <!-- Lectures View -->
       <section id="viewLectures" class="hidden">
         <h3>جميع المحاضرات</h3>
-        <p style="margin-bottom: 2rem;">اختر محاضرة للمشاهدة وتسليم المهام</p>
+        <p style="margin-bottom: 1.5rem;">اختر محاضرة للمشاهدة وتسليم المهام</p>
         <div class="list-group" id="allLecturesList">
           <div class="loading">جاري تحميل المحاضرات...</div>
         </div>
       </section>
-      
+
       <!-- Lecture Detail View -->
       <section id="viewSingleLecture" class="hidden">
-        <button class="btn" id="backToLectures" style="width: auto; margin-bottom: 1rem; background: var(--border); color: var(--text-main);">⟵ رجوع للمحاضرات</button>
+        <button class="btn" id="backToLectures" style="width: auto; margin-bottom: 1.25rem; background: var(--surface-2); color: var(--ink); font-size: 0.85rem;">← رجوع</button>
         <div class="stat-card" style="padding: 2rem;">
           <h2 id="lectureTitle">عنوان المحاضرة</h2>
           <p id="lectureDesc" style="margin-bottom: 1.5rem;">وصف المحاضرة</p>
-          
-          <div style="width: 100%; height: 400px; background: linear-gradient(135deg, #0a0a0a, #1a1a2e); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 2rem; border: 1px solid var(--border);">
-            <span style="color: var(--text-muted); font-size: 1.2rem;">▶️ منطقة عرض الفيديو</span>
+
+          <div style="width: 100%; height: 360px; background: var(--surface-2); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; margin-bottom: 2rem; border: 1px solid var(--surface-3);">
+            <span style="color: var(--ink-muted); font-size: 0.95rem;">▶ منطقة عرض الفيديو</span>
           </div>
 
-          <div style="border-top: 1px solid var(--border); padding-top: 1.5rem;">
+          <div style="border-top: 1px solid var(--surface-3); padding-top: 1.5rem;">
             <h3>تسليم المهمة</h3>
-            <form id="taskForm" style="margin-top: 1rem;">
+            <form id="taskForm" style="margin-top: 0.85rem;">
               <input type="hidden" id="currentLectureId">
               <div class="form-group">
                 <label>رابط ملف الإنجاز (Drive / Github)</label>
                 <input type="url" id="taskUrl" class="form-control" required placeholder="https://...">
               </div>
-              <button type="submit" class="btn" style="width: auto;">تسليم المهمة</button>
+              <button type="submit" class="btn" style="width: auto;">تسليم</button>
             </form>
           </div>
-          
-          <div style="border-top: 1px solid var(--border); padding-top: 1.5rem; margin-top: 1.5rem;">
+
+          <div style="border-top: 1px solid var(--surface-3); padding-top: 1.5rem; margin-top: 1.5rem;">
             <h3>تقييم المحاضرة</h3>
-            <div style="display: flex; gap: 0.5rem; margin-top: 1rem; font-size: 1.5rem; cursor: pointer;">
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.85rem; font-size: 1.5rem; cursor: pointer;">
               <span class="star" data-val="1">☆</span>
               <span class="star" data-val="2">☆</span>
               <span class="star" data-val="3">☆</span>
