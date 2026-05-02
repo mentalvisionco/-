@@ -3,36 +3,37 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>إنشاء حسابات الإدارة المخفية</title>
+  <meta name="description" content="إنشاء حسابات الإدارة للمنصة التدريبية">
+  <title>LMS - إنشاء حساب إدارة</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div class="auth-wrapper">
     <div class="auth-card">
       <div class="auth-header">
-        <h1>إضافة مدير (Admin)</h1>
-        <p>استخدم هذه الصفحة لإنشاء الـ 3 حسابات للإدارة</p>
+        <h1>🛡️ إضافة مدير</h1>
+        <p>استخدم هذه الصفحة لإنشاء حسابات الإدارة</p>
       </div>
       <form id="adminRegForm">
         <div class="form-group">
           <label>اسم المدير</label>
-          <input type="text" id="regName" class="form-control" required>
+          <input type="text" id="regName" class="form-control" required placeholder="اسم المدير">
         </div>
         <div class="form-group">
           <label>البريد الإلكتروني</label>
-          <input type="email" id="regEmail" class="form-control" required>
+          <input type="email" id="regEmail" class="form-control" required placeholder="admin@example.com">
         </div>
         <div class="form-group">
           <label>كلمة المرور</label>
-          <input type="password" id="regPassword" class="form-control" required>
+          <input type="password" id="regPassword" class="form-control" required minlength="3" placeholder="3 أحرف على الأقل">
         </div>
         <!-- This sets the role to admin -->
         <input type="hidden" id="regRole" value="admin">
         
-        <button type="submit" class="btn" style="background-color: var(--warning); color: black;">تسجيل كمدير</button>
+        <button type="submit" class="btn" style="background: linear-gradient(135deg, var(--warning), #d97706); color: #000;">تسجيل كمدير</button>
       </form>
-      <div style="margin-top: 1rem; text-align: center;">
-        <a href="index.html" style="color: var(--primary); text-decoration: underline;">الرجوع للرئيسية</a>
+      <div style="margin-top: 1.5rem; text-align: center;">
+        <a href="index.html" style="color: var(--primary); font-weight: 600;">⟵ الرجوع للرئيسية</a>
       </div>
     </div>
   </div>

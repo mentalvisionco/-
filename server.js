@@ -2,147 +2,265 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const setupDB = require('./database');
+const path = require('path');
+const { setupDB, dbGet, dbAll, dbRun } = require('./database');
 
+// ==============================
+// إعداد التطبيق
+// ==============================
 const app = express();
 const PORT = process.env.PORT || 5000;
-const SECRET_KEY = 'lms_super_secret_key_123'; // In production, use process.env.SECRET_KEY
+const SECRET_KEY = process.env.SECRET_KEY || 'lms_super_secret_key_123';
 
 // Middleware
 app.use(cors());
-app.use(express.json());
-app.use(express.static('public')); // Serve frontend files
+app.use(express.json({ limit: '1mb' }));
+app.use(express.static(path.join(__dirname, 'public')));
 
-let db;
+// ==============================
+// Rate Limiting بسيط
+// ==============================
+const rateLimitMap = new Map();
+const RATE_LIMIT_WINDOW = 60000; // 1 minute
+const RATE_LIMIT_MAX = 60; // 60 requests per minute
 
+function rateLimit(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress;
+  const now = Date.now();
+  
+  if (!rateLimitMap.has(ip)) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+    return next();
+  }
+  
+  const record = rateLimitMap.get(ip);
+  if (now > record.resetTime) {
+    record.count = 1;
+    record.resetTime = now + RATE_LIMIT_WINDOW;
+    return next();
+  }
+  
+  record.count++;
+  if (record.count > RATE_LIMIT_MAX) {
+    return res.status(429).json({ error: 'طلبات كثيرة جداً، حاول بعد قليل' });
+  }
+  
+  next();
+}
+
+app.use('/api', rateLimit);
+
+// ==============================
+// Health Check (مطلوب لـ Railway)
+// ==============================
+app.get('/health', (req, res) => {
+  try {
+    dbGet('SELECT 1 as ok');
+    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  } catch (err) {
+    res.status(503).json({ status: 'error', message: 'Database not available' });
+  }
+});
+
+// ==============================
 // Auth Middleware
-const authenticateToken = (req, res, next) => {
+// ==============================
+function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
   
-  if (!token) return res.status(401).json({ error: 'غير مصرح لك' });
+  if (!token) {
+    return res.status(401).json({ error: 'غير مصرح لك - يرجى تسجيل الدخول' });
+  }
   
-  jwt.verify(token, SECRET_KEY, (err, user) => {
-    if (err) return res.status(403).json({ error: 'انتهت صلاحية الجلسة' });
+  try {
+    const user = jwt.verify(token, SECRET_KEY);
     req.user = user;
     next();
-  });
-};
+  } catch (err) {
+    return res.status(403).json({ error: 'انتهت صلاحية الجلسة - يرجى إعادة تسجيل الدخول' });
+  }
+}
 
-// Start Server IMMEDIATELY for Railway health check
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-  
-  // Connect DB after server starts
-  setupDB().then(database => {
-    db = database;
-    console.log("Database connected successfully!");
-  }).catch(err => {
-    console.error("Database connection failed", err);
-    process.exit(1);
-  });
-});
+// ==============================
+// Input Validation Helpers
+// ==============================
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function sanitize(str) {
+  if (typeof str !== 'string') return '';
+  return str.trim().slice(0, 500);
+}
 
 // =======================
-// مسارات المصادقة (Auth Routes)
+// مسارات المصادقة (Auth)
 // =======================
-app.post('/api/register', async (req, res) => {
-  const { name, email, password, role } = req.body;
+app.post('/api/register', (req, res) => {
   try {
-    const existing = await db.get('SELECT id FROM users WHERE email = ?', [email]);
-    if (existing) return res.status(400).json({ error: 'البريد الإلكتروني مسجل مسبقاً' });
+    const name = sanitize(req.body.name);
+    const email = sanitize(req.body.email);
+    const password = req.body.password;
+    const role = req.body.role === 'admin' ? 'admin' : 'student';
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const result = await db.run(
+    // Validation
+    if (!name || name.length < 2) {
+      return res.status(400).json({ error: 'الاسم مطلوب (حرفين على الأقل)' });
+    }
+    if (!email || !isValidEmail(email)) {
+      return res.status(400).json({ error: 'بريد إلكتروني غير صالح' });
+    }
+    if (!password || password.length < 3) {
+      return res.status(400).json({ error: 'كلمة المرور مطلوبة (3 أحرف على الأقل)' });
+    }
+
+    // Check existing
+    const existing = dbGet('SELECT id FROM users WHERE email = ?', [email]);
+    if (existing) {
+      return res.status(400).json({ error: 'البريد الإلكتروني مسجل مسبقاً' });
+    }
+
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    const result = dbRun(
       'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
-      [name, email, hashedPassword, role || 'student']
+      [name, email, hashedPassword, role]
     );
 
-    const newUser = { id: result.lastID, name, email, role: role || 'student', points: 0 };
+    const newUser = { id: result.lastInsertRowid, name, email, role, points: 0 };
     const token = jwt.sign(newUser, SECRET_KEY, { expiresIn: '24h' });
 
     res.status(201).json({ user: newUser, token });
   } catch (error) {
+    console.error('Register error:', error.message);
     res.status(500).json({ error: 'حدث خطأ في الخادم' });
   }
 });
 
-app.post('/api/login', async (req, res) => {
-  const { email, password } = req.body;
+app.post('/api/login', (req, res) => {
   try {
-    const user = await db.get('SELECT * FROM users WHERE email = ?', [email]);
-    if (!user) return res.status(400).json({ error: 'بيانات الدخول غير صحيحة' });
+    const email = sanitize(req.body.email);
+    const password = req.body.password;
 
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) return res.status(400).json({ error: 'بيانات الدخول غير صحيحة' });
+    if (!email || !password) {
+      return res.status(400).json({ error: 'البريد وكلمة المرور مطلوبان' });
+    }
+
+    const user = dbGet('SELECT * FROM users WHERE email = ?', [email]);
+    if (!user) {
+      return res.status(400).json({ error: 'بيانات الدخول غير صحيحة' });
+    }
+
+    const validPassword = bcrypt.compareSync(password, user.password);
+    if (!validPassword) {
+      return res.status(400).json({ error: 'بيانات الدخول غير صحيحة' });
+    }
 
     const userPayload = { id: user.id, name: user.name, email: user.email, role: user.role, points: user.points };
     const token = jwt.sign(userPayload, SECRET_KEY, { expiresIn: '24h' });
 
     res.json({ user: userPayload, token });
   } catch (error) {
+    console.error('Login error:', error.message);
     res.status(500).json({ error: 'حدث خطأ في الخادم' });
   }
 });
 
-app.get('/api/me', authenticateToken, async (req, res) => {
+app.get('/api/me', authenticateToken, (req, res) => {
   try {
-    const user = await db.get('SELECT id, name, email, role, points FROM users WHERE id = ?', [req.user.id]);
+    const user = dbGet('SELECT id, name, email, role, points FROM users WHERE id = ?', [req.user.id]);
+    if (!user) {
+      return res.status(404).json({ error: 'المستخدم غير موجود' });
+    }
     res.json(user);
   } catch (error) {
+    console.error('Me error:', error.message);
     res.status(500).json({ error: 'حدث خطأ في الخادم' });
   }
 });
 
 // =======================
-// مسارات المحاضرات (Lectures Routes)
+// مسارات المحاضرات (Lectures)
 // =======================
-app.get('/api/lectures', authenticateToken, async (req, res) => {
+app.get('/api/lectures', authenticateToken, (req, res) => {
   try {
-    const lectures = await db.all('SELECT * FROM lectures ORDER BY orderNum ASC');
+    const lectures = dbAll('SELECT * FROM lectures ORDER BY orderNum ASC');
     res.json(lectures);
   } catch (error) {
+    console.error('Lectures error:', error.message);
     res.status(500).json({ error: 'حدث خطأ في جلب المحاضرات' });
   }
 });
 
 // =======================
-// مسارات التسليمات (Submissions & Tasks)
+// مسارات التسليمات (Submissions)
 // =======================
-app.post('/api/submissions', authenticateToken, async (req, res) => {
-  const { lectureId, fileUrl } = req.body;
-  if (req.user.role !== 'student') return res.status(403).json({ error: 'غير مصرح' });
+app.post('/api/submissions', authenticateToken, (req, res) => {
+  if (req.user.role !== 'student') {
+    return res.status(403).json({ error: 'غير مصرح - للطلاب فقط' });
+  }
 
   try {
-    const existing = await db.get('SELECT id FROM submissions WHERE userId = ? AND lectureId = ?', [req.user.id, lectureId]);
+    const lectureId = parseInt(req.body.lectureId);
+    const fileUrl = sanitize(req.body.fileUrl);
+
+    if (!lectureId || isNaN(lectureId)) {
+      return res.status(400).json({ error: 'معرف المحاضرة مطلوب' });
+    }
+    if (!fileUrl) {
+      return res.status(400).json({ error: 'رابط الملف مطلوب' });
+    }
+
+    // التحقق من وجود المحاضرة
+    const lecture = dbGet('SELECT id FROM lectures WHERE id = ?', [lectureId]);
+    if (!lecture) {
+      return res.status(404).json({ error: 'المحاضرة غير موجودة' });
+    }
+
+    const existing = dbGet(
+      'SELECT id FROM submissions WHERE userId = ? AND lectureId = ?',
+      [req.user.id, lectureId]
+    );
+
     if (existing) {
-      await db.run('UPDATE submissions SET fileUrl = ? WHERE id = ?', [fileUrl, existing.id]);
+      dbRun('UPDATE submissions SET fileUrl = ? WHERE id = ?', [fileUrl, existing.id]);
       res.json({ message: 'تم تحديث التسليم بنجاح' });
     } else {
-      await db.run('INSERT INTO submissions (userId, lectureId, fileUrl) VALUES (?, ?, ?)', [req.user.id, lectureId, fileUrl]);
-      // Add points to user
-      await db.run('UPDATE users SET points = points + 50 WHERE id = ?', [req.user.id]);
+      dbRun(
+        'INSERT INTO submissions (userId, lectureId, fileUrl) VALUES (?, ?, ?)',
+        [req.user.id, lectureId, fileUrl]
+      );
+      
+      // إضافة نقاط
+      dbRun('UPDATE users SET points = points + 50 WHERE id = ?', [req.user.id]);
       res.status(201).json({ message: 'تم تسليم المهمة بنجاح وحصلت على 50 نقطة' });
     }
   } catch (error) {
+    console.error('Submission error:', error.message);
     res.status(500).json({ error: 'حدث خطأ أثناء التسليم' });
   }
 });
 
-app.get('/api/submissions/me', authenticateToken, async (req, res) => {
+app.get('/api/submissions/me', authenticateToken, (req, res) => {
   try {
-    const submissions = await db.all('SELECT * FROM submissions WHERE userId = ?', [req.user.id]);
+    const submissions = dbAll('SELECT * FROM submissions WHERE userId = ?', [req.user.id]);
     res.json(submissions);
   } catch (error) {
+    console.error('My submissions error:', error.message);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
 
-// Admin ONLY: Get All Submissions
-app.get('/api/admin/submissions', authenticateToken, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'غير مصرح' });
+// =======================
+// مسارات الإدارة (Admin)
+// =======================
+app.get('/api/admin/submissions', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
+  }
+
   try {
-    const submissions = await db.all(`
+    const submissions = dbAll(`
       SELECT s.*, u.name as studentName, l.title as lectureTitle 
       FROM submissions s
       JOIN users u ON s.userId = u.id
@@ -151,21 +269,64 @@ app.get('/api/admin/submissions', authenticateToken, async (req, res) => {
     `);
     res.json(submissions);
   } catch (error) {
+    console.error('Admin submissions error:', error.message);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
 
-// Admin ONLY: Get All Students and their stats
-app.get('/api/admin/students', authenticateToken, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'غير مصرح' });
+app.get('/api/admin/students', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
+  }
+
   try {
-    const students = await db.all('SELECT id, name, email, points FROM users WHERE role = "student"');
-    for (let student of students) {
-      const subs = await db.get('SELECT COUNT(*) as count FROM submissions WHERE userId = ?', [student.id]);
-      student.submissionsCount = subs.count;
+    const students = dbAll('SELECT id, name, email, points FROM users WHERE role = ?', ['student']);
+
+    for (const student of students) {
+      const subs = dbGet('SELECT COUNT(*) as count FROM submissions WHERE userId = ?', [student.id]);
+      student.submissionsCount = subs ? subs.count : 0;
     }
+
     res.json(students);
   } catch (error) {
+    console.error('Admin students error:', error.message);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
+
+// ==============================
+// Catch-all: serve index.html
+// ==============================
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// ==============================
+// Error Handling Middleware
+// ==============================
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err.message);
+  res.status(500).json({ error: 'حدث خطأ غير متوقع في الخادم' });
+});
+
+// ==============================
+// Start Server
+// ==============================
+async function startServer() {
+  try {
+    // اتصال قاعدة البيانات أولاً
+    await setupDB();
+    console.log('✅ Database connected successfully!');
+
+    // ثم بدء السيرفر
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📡 Health check: http://localhost:${PORT}/health`);
+    });
+  } catch (err) {
+    console.error('❌ Failed to start server:', err.message);
+    process.exit(1);
+  }
+}
+
+startServer();
