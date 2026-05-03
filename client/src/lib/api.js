@@ -1,4 +1,5 @@
-export const API_URL = 'http://localhost:5000/api';
+const isDevelopment = process.env.NODE_ENV === 'development';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || (isDevelopment ? 'http://localhost:5000/api' : '/api');
 
 export function setToken(token) {
   if (typeof window !== 'undefined') {
