@@ -19,7 +19,7 @@ async function setupDB() {
       name TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
-      role TEXT DEFAULT 'student' CHECK(role IN ('student', 'admin')),
+      role TEXT DEFAULT 'student' CHECK(role IN ('student', 'admin', 'viewer')),
       points INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );

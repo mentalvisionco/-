@@ -19,7 +19,7 @@ if (!process.env.SECRET_KEY && process.env.NODE_ENV === 'production') {
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
-app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
+app.use(express.static(path.join(__dirname, 'client', 'out'), { extensions: ['html'] }));
 
 // ==============================
 // Rate Limiting
@@ -40,7 +40,8 @@ app.use('/api', apiLimiter);
 // ==============================
 app.get('/health', (req, res) => {
   try {
-    dbGet('SELECT 1 as ok');
+    const result = dbGet('SELECT 1 as ok');
+    if (!result || result.ok !== 1) throw new Error('DB check failed');
     res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
   } catch (err) {
     res.status(503).json({ status: 'error', message: 'Database not available' });
@@ -112,10 +113,10 @@ app.post('/api/register', (req, res) => {
       [name, email, hashedPassword, role]
     );
 
-    const newUser = { id: result.lastInsertRowid, name, email, role, points: 0 };
-    const token = jwt.sign(newUser, SECRET_KEY, { expiresIn: '24h' });
+    const newUser = { id: result.lastInsertRowid, name, email, role };
+    const token = jwt.sign({ id: newUser.id, name, email, role }, SECRET_KEY, { expiresIn: '24h' });
 
-    res.status(201).json({ user: newUser, token });
+    res.status(201).json({ user: { ...newUser, points: 0 }, token });
   } catch (error) {
     console.error('Register error:', error.message);
     res.status(500).json({ error: 'حدث خطأ في الخادم' });
@@ -141,10 +142,10 @@ app.post('/api/login', (req, res) => {
       return res.status(400).json({ error: 'بيانات الدخول غير صحيحة' });
     }
 
-    const userPayload = { id: user.id, name: user.name, email: user.email, role: user.role, points: user.points };
-    const token = jwt.sign(userPayload, SECRET_KEY, { expiresIn: '24h' });
+    const tokenPayload = { id: user.id, name: user.name, email: user.email, role: user.role };
+    const token = jwt.sign(tokenPayload, SECRET_KEY, { expiresIn: '24h' });
 
-    res.json({ user: userPayload, token });
+    res.json({ user: { ...tokenPayload, points: user.points }, token });
   } catch (error) {
     console.error('Login error:', error.message);
     res.status(500).json({ error: 'حدث خطأ في الخادم' });
@@ -153,7 +154,7 @@ app.post('/api/login', (req, res) => {
 
 app.get('/api/me', authenticateToken, (req, res) => {
   try {
-    const user = dbGet('SELECT id, name, email, role, points FROM users WHERE id = ?', [req.user.id]);
+    const user = dbGet('SELECT id, name, email, role, points, created_at FROM users WHERE id = ?', [req.user.id]);
     if (!user) {
       return res.status(404).json({ error: 'المستخدم غير موجود' });
     }
@@ -164,12 +165,47 @@ app.get('/api/me', authenticateToken, (req, res) => {
   }
 });
 
+app.put('/api/me/password', authenticateToken, (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'كلمة المرور الحالية والجديدة مطلوبتان' });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل' });
+    }
+
+    const user = dbGet('SELECT password FROM users WHERE id = ?', [req.user.id]);
+    if (!user) {
+      return res.status(404).json({ error: 'المستخدم غير موجود' });
+    }
+
+    const validPassword = bcrypt.compareSync(currentPassword, user.password);
+    if (!validPassword) {
+      return res.status(400).json({ error: 'كلمة المرور الحالية غير صحيحة' });
+    }
+
+    const hashedPassword = bcrypt.hashSync(newPassword, 10);
+    dbRun('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, req.user.id]);
+    res.json({ message: 'تم تغيير كلمة المرور بنجاح' });
+  } catch (error) {
+    console.error('Password change error:', error.message);
+    res.status(500).json({ error: 'حدث خطأ في الخادم' });
+  }
+});
+
 // =======================
 // مسارات المحاضرات (Lectures)
 // =======================
 app.get('/api/lectures', authenticateToken, (req, res) => {
   try {
-    const lectures = dbAll('SELECT * FROM lectures ORDER BY orderNum ASC');
+    const lectures = dbAll(`
+      SELECT l.*, ROUND(AVG(r.rating), 1) as avgRating, COUNT(r.id) as ratingCount
+      FROM lectures l
+      LEFT JOIN ratings r ON l.id = r.lectureId
+      GROUP BY l.id
+      ORDER BY l.orderNum ASC
+    `);
     res.json(lectures);
   } catch (error) {
     console.error('Lectures error:', error.message);
@@ -242,9 +278,19 @@ app.get('/api/submissions/me', authenticateToken, (req, res) => {
 // =======================
 // مسارات الإدارة (Admin)
 // =======================
+
+app.get('/api/leaderboard', authenticateToken, (req, res) => {
+  try {
+    const students = dbAll('SELECT name, points FROM users WHERE role = ? ORDER BY points DESC LIMIT 10', ['student']);
+    res.json(students);
+  } catch (error) {
+    console.error('Leaderboard error:', error.message);
+    res.status(500).json({ error: 'حدث خطأ في جلب الليدر بورد' });
+  }
+});
 app.get('/api/admin/submissions', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
+  if (req.user.role !== 'admin' && req.user.role !== 'viewer') {
+    return res.status(403).json({ error: 'غير مصرح - للإدارة أو المشاهدين فقط' });
   }
 
   try {
@@ -263,21 +309,46 @@ app.get('/api/admin/submissions', authenticateToken, (req, res) => {
 });
 
 app.get('/api/admin/students', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
+  if (req.user.role !== 'admin' && req.user.role !== 'viewer') {
+    return res.status(403).json({ error: 'غير مصرح - للإدارة أو المشاهدين فقط' });
   }
 
   try {
-    const students = dbAll('SELECT id, name, email, points FROM users WHERE role = ?', ['student']);
-
-    for (const student of students) {
-      const subs = dbGet('SELECT COUNT(*) as count FROM submissions WHERE userId = ?', [student.id]);
-      student.submissionsCount = subs ? subs.count : 0;
-    }
+    const students = dbAll(`
+      SELECT u.id, u.name, u.email, u.points, 
+             COUNT(s.id) as submissionsCount
+      FROM users u 
+      LEFT JOIN submissions s ON u.id = s.userId
+      WHERE u.role = 'student'
+      GROUP BY u.id
+      ORDER BY u.name ASC
+    `);
 
     res.json(students);
   } catch (error) {
     console.error('Admin students error:', error.message);
+    res.status(500).json({ error: 'حدث خطأ' });
+  }
+});
+
+app.delete('/api/admin/students/:id', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
+  }
+  try {
+    const student = dbGet('SELECT id FROM users WHERE id = ? AND role = ?', [req.params.id, 'student']);
+    if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
+    
+    // Submissions and ratings are cascade deleted due to FOREIGN KEY ON DELETE CASCADE
+    // However, SQLite FOREIGN KEY support needs to be enabled for it to work. 
+    // It is enabled in database.js, but let's be explicit just in case.
+    dbRun('DELETE FROM submissions WHERE userId = ?', [req.params.id]);
+    dbRun('DELETE FROM ratings WHERE userId = ?', [req.params.id]);
+    dbRun('DELETE FROM users WHERE id = ?', [req.params.id]);
+    
+    res.json({ message: 'تم حذف الطالب بنجاح' });
+  } catch (error) {
+    console.error('Delete student error:', error.message);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
@@ -312,6 +383,21 @@ app.put('/api/admin/lectures/:id', authenticateToken, (req, res) => {
   }
 });
 
+app.delete('/api/admin/lectures/:id', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'غير مصرح' });
+  try {
+    const lecture = dbGet('SELECT id FROM lectures WHERE id = ?', [req.params.id]);
+    if (!lecture) return res.status(404).json({ error: 'المحاضرة غير موجودة' });
+    
+    dbRun('DELETE FROM submissions WHERE lectureId = ?', [req.params.id]);
+    dbRun('DELETE FROM ratings WHERE lectureId = ?', [req.params.id]);
+    dbRun('DELETE FROM lectures WHERE id = ?', [req.params.id]);
+    res.json({ message: 'تم حذف المحاضرة بنجاح' });
+  } catch (err) {
+    res.status(500).json({ error: 'حدث خطأ' });
+  }
+});
+
 app.post('/api/lectures/:id/rate', authenticateToken, (req, res) => {
   if (req.user.role !== 'student') return res.status(403).json({ error: 'للطلاب فقط' });
   try {
@@ -331,11 +417,26 @@ app.post('/api/lectures/:id/rate', authenticateToken, (req, res) => {
   }
 });
 
+app.get('/api/lectures/:id/my-rating', authenticateToken, (req, res) => {
+  try {
+    const rating = dbGet('SELECT rating FROM ratings WHERE userId = ? AND lectureId = ?', [req.user.id, req.params.id]);
+    res.json({ rating: rating ? rating.rating : 0 });
+  } catch (err) {
+    res.status(500).json({ error: 'حدث خطأ' });
+  }
+});
+
 // ==============================
 // 404 Route
 // ==============================
 app.use((req, res) => {
-  res.status(404).json({ error: 'Endpoint not found' });
+  if (req.path.startsWith('/api')) {
+    res.status(404).json({ error: 'Endpoint not found' });
+  } else {
+    res.status(404).sendFile(path.join(__dirname, 'client', 'out', '404.html'), (err) => {
+      if (err) res.status(404).send('Not Found');
+    });
+  }
 });
 
 // ==============================
@@ -357,7 +458,8 @@ async function startServer() {
 
     // ثم بدء السيرفر
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`🚀 Server running perfectly!`);
+      console.log(`🌍 Main Website: http://localhost:${PORT}`);
       console.log(`📡 Health check: http://localhost:${PORT}/health`);
     });
   } catch (err) {

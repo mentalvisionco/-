@@ -29,8 +29,8 @@ COPY . .
 # Remove the raw client folder from the final image to save space
 RUN rm -rf client
 
-# Copy the compiled Next.js static files to the backend's public directory
-COPY --from=builder /app/client/out ./public
+# Copy the compiled Next.js static files to the expected directory
+COPY --from=builder /app/client/out ./client/out
 
 # Expose port (Railway will set the PORT env variable automatically)
 EXPOSE 8080

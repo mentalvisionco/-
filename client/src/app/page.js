@@ -27,7 +27,7 @@ export default function AuthPage() {
   }, []);
 
   const redirectUser = (role) => {
-    if (role === 'admin') {
+    if (role === 'admin' || role === 'viewer') {
       router.push('/admin');
     } else {
       router.push('/student');
@@ -148,8 +148,8 @@ export default function AuthPage() {
                 type="password" 
                 className="form-control" 
                 required 
-                minLength="3" 
-                placeholder="3 أحرف على الأقل"
+                minLength="8" 
+                placeholder="8 أحرف على الأقل"
                 value={regPassword}
                 onChange={(e) => setRegPassword(e.target.value)}
               />
