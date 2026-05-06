@@ -120,27 +120,12 @@ small {
   position: relative;
 }
 
-/* Decorative corner lines */
+/* Decorative corner lines removed per user request */
 .auth-wrapper::before,
 .auth-wrapper::after {
-  content: '';
-  position: absolute;
-  background: var(--surface-3);
+  display: none;
 }
 
-.auth-wrapper::before {
-  top: 3rem;
-  right: 3rem;
-  width: 80px;
-  height: 1px;
-}
-
-.auth-wrapper::after {
-  bottom: 3rem;
-  left: 3rem;
-  width: 1px;
-  height: 80px;
-}
 
 .auth-card {
   background: var(--surface-1);
@@ -307,17 +292,22 @@ small {
   color: var(--surface-0);
   box-shadow: var(--shadow-lg);
   transform: translateY(120%);
-  transition: transform 0.4s var(--ease);
+  transition: transform 0.4s var(--ease), opacity 0.4s var(--ease);
   z-index: 9999;
   max-width: 360px;
   font-weight: 500;
   font-size: 0.9rem;
   border-right: 3px solid var(--accent);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .toast.show {
   transform: translateY(0);
+  opacity: 1;
+  pointer-events: all;
 }
+
 
 .toast.error {
   border-right-color: var(--red);
