@@ -9,8 +9,8 @@
 .statsGrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-4);
-  margin-bottom: var(--space-8);
+  gap: var(--space-5);
+  margin-bottom: var(--space-10);
 }
 .statsGrid > :nth-child(1) { animation-delay: 0ms; }
 .statsGrid > :nth-child(2) { animation-delay: 60ms; }
@@ -20,11 +20,12 @@
 .progressCard > :first-child { flex: 1; }
 
 .sectionTitle {
-  font-size: var(--font-lg);
+  font-size: var(--font-xl);
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-5);
   letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
 }
 
 .listGap {
@@ -40,15 +41,17 @@
 
 .pointsBadge {
   font-size: var(--font-base) !important;
-  padding: var(--space-2) var(--space-4) !important;
+  padding: var(--space-2) var(--space-5) !important;
 }
 
 .mobileTop {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-4);
 }
 
 @media (max-width: 768px) {
-  .statsGrid { grid-template-columns: 1fr; gap: var(--space-3); }
+  .statsGrid { grid-template-columns: 1fr; gap: var(--space-4); margin-bottom: var(--space-8); }
+  .sectionTitle { margin-bottom: var(--space-4); }
 }

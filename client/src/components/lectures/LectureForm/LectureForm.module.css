@@ -1,4 +1,7 @@
-.form { margin-bottom: var(--space-5); }
-.heading { font-size: var(--font-lg); font-weight: var(--weight-semibold); margin-bottom: var(--space-4); }
-.fields { display: flex; flex-direction: column; gap: var(--space-4); }
-.actions { display: flex; gap: var(--space-3); padding-top: var(--space-2); }
+.form { margin-bottom: var(--space-6); }
+.heading {
+  font-size: var(--font-lg); font-weight: var(--weight-semibold);
+  margin-bottom: var(--space-6); line-height: var(--leading-tight);
+}
+.fields { display: flex; flex-direction: column; gap: var(--space-5); }
+.actions { display: flex; gap: var(--space-3); padding-top: var(--space-4); }

@@ -2,8 +2,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-4) var(--space-5);
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-6);
   background: var(--surface-1);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
@@ -40,13 +40,13 @@
 .content { display: flex; align-items: center; gap: var(--space-4); flex: 1; min-width: 0; }
 
 .orderBadge {
-  width: 38px; height: 38px;
+  width: 42px; height: 42px;
   border-radius: var(--radius-lg);
   background: var(--surface-2);
   border: 1px solid var(--border-subtle);
   color: var(--text-tertiary);
   display: flex; align-items: center; justify-content: center;
-  font-size: var(--font-sm); font-weight: var(--weight-bold);
+  font-size: var(--font-base); font-weight: var(--weight-bold);
   flex-shrink: 0;
   transition: all var(--duration-normal);
 }
@@ -57,23 +57,26 @@
   color: var(--accent);
 }
 
-.info { flex: 1; min-width: 0; }
+.info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); }
 .title {
   font-size: var(--font-md); font-weight: var(--weight-semibold);
-  color: var(--text-primary); margin-bottom: 2px;
+  color: var(--text-primary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  line-height: var(--leading-tight);
 }
 .desc {
-  font-size: var(--font-sm); color: var(--text-tertiary);
+  font-size: var(--font-base); color: var(--text-tertiary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  line-height: var(--leading-normal);
 }
-.meta { display: flex; align-items: center; gap: var(--space-3); flex-shrink: 0; }
+
+.meta { display: flex; align-items: center; gap: var(--space-4); flex-shrink: 0; }
 .rating {
-  display: flex; align-items: center; gap: 3px;
-  font-size: var(--font-sm); font-weight: var(--weight-semibold); color: var(--amber);
+  display: flex; align-items: center; gap: 4px;
+  font-size: var(--font-base); font-weight: var(--weight-semibold); color: var(--amber);
 }
 .arrow {
-  color: var(--text-disabled); font-size: var(--font-lg);
+  color: var(--text-disabled); font-size: var(--font-xl);
   transition: all var(--duration-normal);
 }
 .card:hover .arrow { transform: translateX(-4px); color: var(--accent); }
@@ -81,4 +84,10 @@
 @keyframes cardIn {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 640px) {
+  .card { padding: var(--space-4) var(--space-5); }
+  .orderBadge { width: 38px; height: 38px; }
+  .meta { gap: var(--space-3); }
 }

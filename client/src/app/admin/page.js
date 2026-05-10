@@ -10,6 +10,7 @@ import StatCard from '@/components/dashboard/StatCard/StatCard';
 import LectureForm from '@/components/lectures/LectureForm/LectureForm';
 import RatingsModal from '@/components/lectures/RatingsModal/RatingsModal';
 import TaskForm from '@/components/tasks/TaskForm/TaskForm';
+import StudentModal from '@/components/students/StudentModal/StudentModal';
 import Button from '@/components/ui/Button/Button';
 import Badge from '@/components/ui/Badge/Badge';
 import Card from '@/components/ui/Card/Card';
@@ -53,6 +54,11 @@ export default function AdminDashboard() {
   const [taskFormTitle, setTaskFormTitle] = useState('');
   const [taskFormDesc, setTaskFormDesc] = useState('');
   const [taskFormUrl, setTaskFormUrl] = useState('');
+
+  // Student modal
+  const [showStudentModal, setShowStudentModal] = useState(false);
+  const [editStudentId, setEditStudentId] = useState(null);
+  const [studentModalData, setStudentModalData] = useState(null);
 
   // Ratings modal
   const [showRatingsModal, setShowRatingsModal] = useState(false);
@@ -143,6 +149,33 @@ export default function AdminDashboard() {
   };
 
   // ——— Student handler ———
+  const openAddStudent = () => {
+    setEditStudentId(null);
+    setStudentModalData(null);
+    setShowStudentModal(true);
+  };
+  const openEditStudent = (s) => {
+    setEditStudentId(s.id);
+    setStudentModalData(s);
+    setShowStudentModal(true);
+  };
+  const handleSaveStudent = async (formData) => {
+    try {
+      if (editStudentId) {
+        await apiCall(`/admin/students/${editStudentId}`, 'PUT', formData);
+        toast.success('تم تعديل بيانات الطالب بنجاح');
+      } else {
+        await apiCall('/admin/students', 'POST', formData);
+        toast.success('تمت إضافة الطالب بنجاح');
+      }
+      setShowStudentModal(false);
+      fetchData();
+    } catch (err) {
+      toast.error(err.message);
+      throw err;
+    }
+  };
+
   const handleDeleteStudent = (id, name) => {
     setConfirmState({
       open: true,
@@ -217,37 +250,61 @@ export default function AdminDashboard() {
       {currentView === 'students' && (
         <div className={styles.view} key="students">
           <Header title="قائمة المتدربين" subtitle="حساب التقييم بناءً على الحضور والتسليم">
-            <div className={styles.searchWrap}>
-              <Input icon={IconSearch} placeholder="بحث بالاسم أو البريد..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} size="sm" />
+            <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
+              <div className={styles.searchWrap}>
+                <Input icon={IconSearch} placeholder="بحث بالاسم أو البريد..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} size="sm" />
+              </div>
+              {isAdmin && <Button variant="primary" size="md" icon={IconPlus} onClick={openAddStudent}>إضافة طالب</Button>}
             </div>
           </Header>
+
+          <StudentModal
+            isOpen={showStudentModal}
+            onClose={() => setShowStudentModal(false)}
+            editId={editStudentId}
+            initialData={studentModalData}
+            onSave={handleSaveStudent}
+          />
           {loading ? <SkeletonTable rows={5} cols={5} /> : (
             <div className={styles.tableWrap}>
               <table className={styles.table}>
                 <thead>
                   <tr>
-                    <th>الاسم</th><th>البريد</th><th>النقاط</th><th>التسليمات</th><th>التقييم</th>
+                    <th>الطالب</th>
+                    <th>البريد</th>
+                    <th>الدور</th>
+                    <th>التسليمات</th>
+                    <th>التقييم</th>
                     {isAdmin && <th>إجراءات</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredStudents.length === 0 ? (
-                    <tr><td colSpan={isAdmin ? 6 : 5} className={styles.emptyCell}>
-                      {students.length === 0 ? 'لا يوجد طلاب مسجلين.' : 'لا توجد نتائج مطابقة.'}
-                    </td></tr>
+                    <tr>
+                      <td colSpan={isAdmin ? 6 : 5} className={styles.emptyCell}>
+                        <EmptyState icon={IconStudents} title="لا يوجد طلاب" description={students.length === 0 ? "قم بإضافة أول طالب للمنصة." : "لا توجد نتائج مطابقة لبحثك."} />
+                      </td>
+                    </tr>
                   ) : (
                     filteredStudents.map(s => {
                       const score = (s.submissionsCount * 10) + (s.points || 0);
                       const variant = score >= 100 ? 'success' : score >= 50 ? 'warning' : 'danger';
+                      const initials = s.name ? s.name.substring(0, 2) : 'ط';
                       return (
-                        <tr key={s.id}>
-                          <td className={styles.nameCell}>{s.name}</td>
+                        <tr key={s.id} className={styles.tableRow}>
+                          <td className={styles.nameCell}>
+                            <div className={styles.studentInfoCard}>
+                              <div className={styles.avatar}>{initials}</div>
+                              <span>{s.name}</span>
+                            </div>
+                          </td>
                           <td className={styles.emailCell}>{s.email}</td>
-                          <td>{s.points || 0}</td>
+                          <td><Badge variant="info">طالب</Badge></td>
                           <td>{s.submissionsCount} / {totalLectures}</td>
                           <td><Badge variant={variant}>{score} نقطة</Badge></td>
                           {isAdmin && (
-                            <td>
+                            <td className={styles.actionsCell}>
+                              <Button variant="secondary" size="sm" icon={IconEdit} onClick={() => openEditStudent(s)}>تعديل</Button>
                               <Button variant="danger" size="sm" icon={IconTrash} onClick={() => handleDeleteStudent(s.id, s.name)}>حذف</Button>
                             </td>
                           )}

@@ -8,13 +8,12 @@
     transform var(--duration-normal) var(--ease-out);
 }
 
-.card:hover {
-  border-color: var(--border-default);
-}
+.card:hover { border-color: var(--border-default); }
 
-.sm { padding: var(--space-4); }
-.md { padding: var(--space-5); }
-.lg { padding: var(--space-6) var(--space-8); }
+/* Padding variants — must match Card.js `pad-${padding}` naming */
+.pad-sm { padding: var(--space-5) var(--space-6); }
+.pad-md { padding: var(--space-6) var(--space-7); }
+.pad-lg { padding: var(--space-8) var(--space-10); }
 
 .hoverable:hover {
   border-color: var(--border-hover);

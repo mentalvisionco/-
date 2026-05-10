@@ -13,7 +13,7 @@
 
 .content {
   flex: 1;
-  padding: var(--space-8) var(--space-10);
+  padding: var(--space-10) var(--content-padding-x);
   max-width: var(--content-max-width);
   width: 100%;
   animation: contentReveal var(--duration-slower) var(--ease-out) both;
@@ -26,7 +26,7 @@
 
 .mobileHeader {
   display: none;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-4) var(--content-padding-x-sm);
   position: sticky;
   top: 0;
   z-index: var(--z-sticky);
@@ -37,13 +37,13 @@
 }
 
 @media (max-width: 1200px) {
-  .content { padding: var(--space-6); }
+  .content { padding: var(--space-8) var(--content-padding-x-md); }
 }
 
 @media (max-width: 768px) {
   .mobileHeader { display: block; }
   .content {
-    padding: var(--space-4);
-    padding-bottom: calc(var(--mobile-nav-height) + var(--space-4));
+    padding: var(--space-6) var(--content-padding-x-sm);
+    padding-bottom: calc(var(--mobile-nav-height) + var(--space-6));
   }
 }

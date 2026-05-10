@@ -3,7 +3,7 @@
   min-width: var(--sidebar-width);
   background: var(--surface-1);
   border-left: 1px solid var(--border-subtle);
-  padding: var(--space-5) var(--space-4);
+  padding: var(--space-6) var(--space-6);
   display: flex;
   flex-direction: column;
   position: sticky;
@@ -16,17 +16,17 @@
 
 .brand {
   padding: 0 var(--space-3);
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-10);
 }
 
-.logo { max-width: 140px; height: auto; }
+.logo { max-width: 150px; height: auto; }
 
 .nav { flex: 1; }
 
 .navList {
   display: flex;
   flex-direction: column;
-  gap: var(--space-0-5);
+  gap: var(--space-1);
 }
 
 .navLink {
@@ -34,7 +34,7 @@
   align-items: center;
   gap: var(--space-3);
   width: 100%;
-  padding: var(--space-2-5, 10px) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-lg);
   color: var(--text-tertiary);
   font-size: var(--font-md);
@@ -46,6 +46,7 @@
   text-align: right;
   position: relative;
   overflow: hidden;
+  line-height: var(--leading-normal);
 }
 
 .navLink::before {
@@ -58,35 +59,25 @@
   pointer-events: none;
 }
 
-.navLink:hover {
-  color: var(--text-primary);
-}
-
-.navLink:hover::before {
-  background: var(--surface-2);
-}
-
-.navLink:active {
-  transform: scale(0.98);
-}
+.navLink:hover { color: var(--text-primary); }
+.navLink:hover::before { background: var(--surface-2); }
+.navLink:active { transform: scale(0.98); }
 
 .navLink.active {
   color: var(--text-primary);
   font-weight: var(--weight-semibold);
 }
 
-.navLink.active::before {
-  background: var(--accent-muted);
-}
+.navLink.active::before { background: var(--accent-muted); }
 
 .navLink.active::after {
   content: '';
   position: absolute;
-  right: calc(-1 * var(--space-4));
+  right: calc(-1 * var(--space-6));
   top: 50%;
   transform: translateY(-50%);
   width: 3px;
-  height: 18px;
+  height: 20px;
   background: var(--accent);
   border-radius: 2px;
   box-shadow: 0 0 8px var(--accent-glow);
@@ -95,7 +86,7 @@
 
 @keyframes indicatorIn {
   from { height: 0; opacity: 0; }
-  to { height: 18px; opacity: 1; }
+  to { height: 20px; opacity: 1; }
 }
 
 .navIcon {

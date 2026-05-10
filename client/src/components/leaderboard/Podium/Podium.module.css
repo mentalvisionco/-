@@ -1,16 +1,16 @@
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: var(--space-4);
+  gap: var(--space-5);
   align-items: end;
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-10);
 }
 .empty { min-height: 80px; }
 
 .card {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
-  padding: var(--space-6) var(--space-4);
+  padding: var(--space-8) var(--space-5);
   text-align: center;
   position: relative;
   overflow: hidden;
@@ -35,38 +35,40 @@
 .gold {
   background: linear-gradient(180deg, rgba(245, 166, 35, 0.10) 0%, var(--surface-1) 70%);
   border-color: rgba(245, 166, 35, 0.2);
-  min-height: 190px;
+  min-height: 200px;
 }
 .gold:hover { box-shadow: 0 12px 28px rgba(245, 166, 35, 0.12); }
 
 .silver {
   background: linear-gradient(180deg, rgba(176, 186, 197, 0.08) 0%, var(--surface-1) 70%);
   border-color: rgba(176, 186, 197, 0.15);
-  min-height: 155px;
+  min-height: 165px;
 }
 .silver:hover { box-shadow: 0 12px 28px rgba(176, 186, 197, 0.08); }
 
 .bronze {
   background: linear-gradient(180deg, rgba(200, 117, 51, 0.08) 0%, var(--surface-1) 70%);
   border-color: rgba(200, 117, 51, 0.15);
-  min-height: 135px;
+  min-height: 145px;
 }
 .bronze:hover { box-shadow: 0 12px 28px rgba(200, 117, 51, 0.08); }
 
 .medal {
-  font-size: 2.5rem; display: block;
-  margin-bottom: var(--space-3);
+  font-size: 2.75rem; display: block;
+  margin-bottom: var(--space-4);
   animation: float 3s ease-in-out infinite;
 }
 
 .name {
   font-size: var(--font-md); font-weight: var(--weight-bold);
-  color: var(--text-primary); margin-bottom: var(--space-1);
+  color: var(--text-primary); margin-bottom: var(--space-2);
+  line-height: var(--leading-tight);
 }
 
 .points {
-  font-size: var(--font-sm); color: var(--accent-text);
+  font-size: var(--font-base); color: var(--accent-text);
   font-weight: var(--weight-semibold);
+  line-height: var(--leading-normal);
 }
 
 @keyframes podiumIn {
@@ -75,6 +77,6 @@
 }
 
 @media (max-width: 640px) {
-  .grid { grid-template-columns: 1fr; }
-  .gold, .silver, .bronze { min-height: auto; }
+  .grid { grid-template-columns: 1fr; gap: var(--space-4); }
+  .gold, .silver, .bronze { min-height: auto; padding: var(--space-6) var(--space-5); }
 }

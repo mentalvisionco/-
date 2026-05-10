@@ -21,7 +21,6 @@
   overflow: hidden;
 }
 
-/* Press animation — satisfying tactile feedback */
 .btn:active:not(:disabled) {
   transform: scale(0.96);
   transition-duration: var(--duration-instant);
@@ -33,28 +32,27 @@
   pointer-events: none;
 }
 
-.btn:focus-visible {
-  box-shadow: var(--shadow-focus);
-}
+.btn:focus-visible { box-shadow: var(--shadow-focus); }
 
-/* ——— Sizes ——— */
+/* ——— Sizes (generous touch targets + breathing room) ——— */
 .sm {
-  padding: var(--space-1) var(--space-3);
+  padding: var(--space-1-5) var(--space-4);
   font-size: var(--font-sm);
   border-radius: var(--radius-sm);
-  height: 32px;
+  height: 34px;
+  gap: var(--space-1-5);
 }
 
 .md {
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--space-5);
   font-size: var(--font-base);
-  height: 38px;
+  height: 40px;
 }
 
 .lg {
-  padding: var(--space-3) var(--space-6);
+  padding: var(--space-3) var(--space-7);
   font-size: var(--font-md);
-  height: 44px;
+  height: 46px;
   border-radius: var(--radius-lg);
 }
 

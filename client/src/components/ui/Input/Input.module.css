@@ -1,4 +1,4 @@
-.wrapper { display: flex; flex-direction: column; gap: var(--space-1-5); }
+.wrapper { display: flex; flex-direction: column; gap: var(--space-2); }
 
 .label {
   display: block;
@@ -6,6 +6,7 @@
   font-weight: var(--weight-medium);
   color: var(--text-secondary);
   letter-spacing: var(--tracking-wide);
+  padding-right: var(--space-0-5);
 }
 
 .inputWrap {
@@ -16,7 +17,7 @@
 
 .input {
   width: 100%;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   background: var(--surface-2);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -49,15 +50,15 @@
 .input:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ——— Sizes ——— */
-.sm .input { height: 32px; font-size: var(--font-sm); padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm); }
-.md .input { height: 38px; font-size: var(--font-base); }
-.lg .input { height: 44px; font-size: var(--font-md); padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); }
+.sm .input { height: 34px; font-size: var(--font-sm); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); }
+.md .input { height: 40px; font-size: var(--font-base); }
+.lg .input { height: 46px; font-size: var(--font-md); padding: var(--space-3) var(--space-5); border-radius: var(--radius-lg); }
 
 /* ——— With icon ——— */
 .hasIcon .input { padding-right: var(--space-10); }
 .iconSlot {
   position: absolute;
-  right: var(--space-3);
+  right: var(--space-4);
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-disabled);

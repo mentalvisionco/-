@@ -320,6 +320,72 @@ app.delete('/api/admin/students/:id', authenticateToken, (req, res) => {
   }
 });
 
+app.post('/api/admin/students', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
+  }
+  try {
+    const { name, email, password, points } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ error: 'الاسم والبريد وكلمة المرور مطلوبة' });
+    if (!isValidEmail(email)) return res.status(400).json({ error: 'البريد الإلكتروني غير صالح' });
+    if (password.length < 8) return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل' });
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = sanitize(name);
+
+    const existing = dbGet('SELECT id FROM users WHERE email = ?', [cleanEmail]);
+    if (existing) return res.status(400).json({ error: 'البريد الإلكتروني مستخدم بالفعل' });
+
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    const p = parseInt(points) || 0;
+
+    dbRun('INSERT INTO users (name, email, password, role, points) VALUES (?, ?, ?, ?, ?)',
+      [cleanName, cleanEmail, hashedPassword, 'student', p]);
+    
+    res.json({ message: 'تم إضافة الطالب بنجاح' });
+  } catch (err) {
+    console.error('Add student error:', err.message);
+    res.status(500).json({ error: 'حدث خطأ أثناء إضافة الطالب' });
+  }
+});
+
+app.put('/api/admin/students/:id', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
+  }
+  try {
+    const { name, email, password, points } = req.body;
+    if (!name || !email) return res.status(400).json({ error: 'الاسم والبريد مطلوبان' });
+    if (!isValidEmail(email)) return res.status(400).json({ error: 'البريد الإلكتروني غير صالح' });
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = sanitize(name);
+
+    const student = dbGet('SELECT id FROM users WHERE id = ? AND role = ?', [req.params.id, 'student']);
+    if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
+
+    const existingEmail = dbGet('SELECT id FROM users WHERE email = ? AND id != ?', [cleanEmail, req.params.id]);
+    if (existingEmail) return res.status(400).json({ error: 'البريد الإلكتروني مستخدم من قبل مستخدم آخر' });
+
+    const p = parseInt(points) || 0;
+
+    if (password && password.trim().length > 0) {
+      if (password.length < 8) return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل' });
+      const hashedPassword = bcrypt.hashSync(password, 10);
+      dbRun('UPDATE users SET name = ?, email = ?, password = ?, points = ? WHERE id = ?',
+        [cleanName, cleanEmail, hashedPassword, p, req.params.id]);
+    } else {
+      dbRun('UPDATE users SET name = ?, email = ?, points = ? WHERE id = ?',
+        [cleanName, cleanEmail, p, req.params.id]);
+    }
+    
+    res.json({ message: 'تم التعديل بنجاح' });
+  } catch (err) {
+    console.error('Update student error:', err.message);
+    res.status(500).json({ error: 'حدث خطأ أثناء تعديل بيانات الطالب' });
+  }
+});
+
 app.post('/api/admin/lectures', authenticateToken, (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
