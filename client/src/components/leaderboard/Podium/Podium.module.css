@@ -1,0 +1,80 @@
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--space-4);
+  align-items: end;
+  margin-bottom: var(--space-8);
+}
+.empty { min-height: 80px; }
+
+.card {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  transition: all var(--duration-normal) var(--ease-out);
+  animation: podiumIn var(--duration-slower) var(--ease-spring) both;
+}
+
+/* Glassmorphism effect */
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.card:hover {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-lg);
+}
+
+.gold {
+  background: linear-gradient(180deg, rgba(245, 166, 35, 0.10) 0%, var(--surface-1) 70%);
+  border-color: rgba(245, 166, 35, 0.2);
+  min-height: 190px;
+}
+.gold:hover { box-shadow: 0 12px 28px rgba(245, 166, 35, 0.12); }
+
+.silver {
+  background: linear-gradient(180deg, rgba(176, 186, 197, 0.08) 0%, var(--surface-1) 70%);
+  border-color: rgba(176, 186, 197, 0.15);
+  min-height: 155px;
+}
+.silver:hover { box-shadow: 0 12px 28px rgba(176, 186, 197, 0.08); }
+
+.bronze {
+  background: linear-gradient(180deg, rgba(200, 117, 51, 0.08) 0%, var(--surface-1) 70%);
+  border-color: rgba(200, 117, 51, 0.15);
+  min-height: 135px;
+}
+.bronze:hover { box-shadow: 0 12px 28px rgba(200, 117, 51, 0.08); }
+
+.medal {
+  font-size: 2.5rem; display: block;
+  margin-bottom: var(--space-3);
+  animation: float 3s ease-in-out infinite;
+}
+
+.name {
+  font-size: var(--font-md); font-weight: var(--weight-bold);
+  color: var(--text-primary); margin-bottom: var(--space-1);
+}
+
+.points {
+  font-size: var(--font-sm); color: var(--accent-text);
+  font-weight: var(--weight-semibold);
+}
+
+@keyframes podiumIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 640px) {
+  .grid { grid-template-columns: 1fr; }
+  .gold, .silver, .bronze { min-height: auto; }
+}

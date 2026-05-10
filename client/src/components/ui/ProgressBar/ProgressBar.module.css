@@ -1,0 +1,57 @@
+.wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.label {
+  font-size: var(--font-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.track {
+  flex: 1;
+  height: 6px;
+  background: var(--surface-3);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  position: relative;
+}
+
+.fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-hover) 100%);
+  border-radius: var(--radius-full);
+  transition: width var(--duration-slower) var(--ease-out);
+  position: relative;
+  animation: fillWidth var(--duration-slowest) var(--ease-out) both;
+}
+
+/* Shine effect on the progress bar */
+.fill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  animation: progressShine 2s ease-in-out infinite;
+}
+
+@keyframes fillWidth {
+  from { width: 0; }
+}
+
+@keyframes progressShine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.percent {
+  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+  color: var(--accent);
+  white-space: nowrap;
+  min-width: 38px;
+  text-align: left;
+}

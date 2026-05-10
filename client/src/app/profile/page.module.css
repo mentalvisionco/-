@@ -1,0 +1,78 @@
+.wrapper {
+  min-height: 100vh;
+  background: var(--surface-0);
+  padding: var(--space-8);
+}
+.container {
+  max-width: 560px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  animation: profileIn var(--duration-slower) var(--ease-out) both;
+}
+
+@keyframes profileIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.profileCard { text-align: center; position: relative; overflow: hidden; }
+
+/* Subtle gradient background */
+.profileCard::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 80px;
+  background: linear-gradient(180deg, rgba(92, 214, 69, 0.04) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+.avatarLarge {
+  width: 80px; height: 80px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, var(--accent), var(--blue));
+  color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: var(--weight-bold); font-size: var(--font-3xl);
+  margin: 0 auto var(--space-4);
+  box-shadow: 0 4px 20px rgba(92, 214, 69, 0.2);
+  position: relative;
+  z-index: 1;
+}
+
+.name {
+  font-size: var(--font-2xl); font-weight: var(--weight-bold);
+  margin-bottom: var(--space-2); letter-spacing: var(--tracking-tight);
+}
+
+.infoGrid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: var(--space-4); margin-top: var(--space-6); text-align: right;
+}
+.infoItem { display: flex; align-items: flex-start; gap: var(--space-3); }
+.infoIcon { color: var(--text-disabled); margin-top: 2px; flex-shrink: 0; }
+
+.infoLabel {
+  display: block; font-size: var(--font-xs); font-weight: var(--weight-semibold);
+  color: var(--text-tertiary); text-transform: uppercase;
+  letter-spacing: 0.06em; margin-bottom: 2px;
+}
+.infoValue {
+  display: block; font-size: var(--font-md);
+  color: var(--text-primary); font-weight: var(--weight-medium);
+}
+
+.passwordHeader {
+  display: flex; align-items: center; gap: var(--space-3);
+  margin-bottom: var(--space-5); color: var(--text-primary);
+}
+.passwordHeader h3 { font-size: var(--font-lg); font-weight: var(--weight-semibold); }
+
+.passwordForm { display: flex; flex-direction: column; gap: var(--space-4); }
+
+@media (max-width: 640px) {
+  .wrapper { padding: var(--space-4); }
+  .infoGrid { grid-template-columns: 1fr; }
+}

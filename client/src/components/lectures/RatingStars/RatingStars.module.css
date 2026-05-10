@@ -1,0 +1,23 @@
+.stars { display: flex; gap: var(--space-1); align-items: center; }
+
+.star {
+  color: var(--text-disabled);
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-normal) var(--ease-spring);
+  display: flex;
+}
+
+.star:not(.readonly):hover {
+  color: var(--amber);
+  transform: scale(1.2);
+}
+
+.star:not(.readonly):active {
+  transform: scale(0.9);
+  transition-duration: var(--duration-instant);
+}
+
+.star.filled { color: var(--amber); }
+
+.star.readonly { cursor: default; }

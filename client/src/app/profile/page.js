@@ -2,145 +2,112 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiCall, getCurrentUser, getToken, logout, showToast } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
+import { apiCall } from '@/lib/api';
+import Button from '@/components/ui/Button/Button';
+import Input from '@/components/ui/Input/Input';
+import Card from '@/components/ui/Card/Card';
+import Badge from '@/components/ui/Badge/Badge';
+import { IconArrowRight, IconLock, IconMail, IconAward, IconCalendar, IconProfile } from '@/components/icons';
+import styles from './page.module.css';
 
 export default function ProfilePage() {
   const router = useRouter();
-  const [user, setUser] = useState(null);
+  const { user, ready } = useAuth();
+  const { toast } = useToast();
+  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
 
-  async function fetchProfile() {
-    try {
-      const me = await apiCall('/me');
-      setUser(me);
-    } catch {
-      showToast('خطأ في جلب البيانات', 'error');
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
-    const currentUser = getCurrentUser();
-    const token = getToken();
-    if (!currentUser || !token) {
-      router.push('/');
-      return;
+    if (ready && !user) { router.push('/'); return; }
+    if (ready && user) {
+      apiCall('/me').then(setProfile).catch(() => toast.error('خطأ في جلب البيانات')).finally(() => setLoading(false));
     }
-    fetchProfile();
-  }, [router]);
-
-  // Moved fetchProfile
+  }, [ready]);
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
     setChangingPassword(true);
     try {
       const res = await apiCall('/me/password', 'PUT', { currentPassword, newPassword });
-      showToast(res.message, 'success');
-      setCurrentPassword('');
-      setNewPassword('');
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setChangingPassword(false);
-    }
+      toast.success(res.message);
+      setCurrentPassword(''); setNewPassword('');
+    } catch (err) { toast.error(err.message); }
+    finally { setChangingPassword(false); }
   };
 
   const goBack = () => {
-    const currentUser = getCurrentUser();
-    if (currentUser?.role === 'admin' || currentUser?.role === 'viewer') {
-      router.push('/admin');
-    } else {
-      router.push('/student');
-    }
+    if (user?.role === 'admin' || user?.role === 'viewer') router.push('/admin');
+    else router.push('/student');
   };
 
-  const getRoleName = (role) => {
-    const roles = { admin: 'مدير النظام', viewer: 'مشاهد', student: 'طالب' };
-    return roles[role] || role;
-  };
+  const getRoleName = (role) => ({ admin: 'مدير النظام', viewer: 'مشاهد', student: 'طالب' }[role] || role);
 
-  if (loading) {
-    return <div className="loading" style={{ height: '100vh' }}>جاري التحميل...</div>;
-  }
-
-  if (!user) return null;
+  if (loading || !profile) return null;
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--surface-0)', padding: '2rem' }}>
-      <div style={{ maxWidth: '560px', margin: '0 auto' }}>
-        <button
-          className="btn"
-          style={{ width: 'auto', marginBottom: '1.5rem', background: 'var(--surface-2)', color: 'var(--ink)', fontSize: '0.85rem' }}
-          onClick={goBack}
-        >
-          ← رجوع
-        </button>
+    <div className={styles.wrapper}>
+      <div className={styles.container}>
+        <Button variant="ghost" size="sm" onClick={goBack} icon={IconArrowRight} iconPosition="start">
+          رجوع
+        </Button>
 
-        <div className="profile-card section-fade" style={{ textAlign: 'center' }}>
-          <div className="profile-avatar-large">
-            {user.name.charAt(0)}
+        <Card padding="lg" animate className={styles.profileCard}>
+          <div className={styles.avatarLarge}>{profile.name?.charAt(0)}</div>
+          <h2 className={styles.name}>{profile.name}</h2>
+          <Badge variant="accent">{getRoleName(profile.role)}</Badge>
+
+          <div className={styles.infoGrid}>
+            <div className={styles.infoItem}>
+              <IconMail size={16} className={styles.infoIcon} />
+              <div>
+                <span className={styles.infoLabel}>البريد الإلكتروني</span>
+                <span className={styles.infoValue}>{profile.email}</span>
+              </div>
+            </div>
+            <div className={styles.infoItem}>
+              <IconAward size={16} className={styles.infoIcon} />
+              <div>
+                <span className={styles.infoLabel}>النقاط</span>
+                <span className={styles.infoValue} style={{ color: 'var(--accent)' }}>{profile.points || 0} نقطة</span>
+              </div>
+            </div>
+            <div className={styles.infoItem}>
+              <IconProfile size={16} className={styles.infoIcon} />
+              <div>
+                <span className={styles.infoLabel}>الدور</span>
+                <span className={styles.infoValue}>{getRoleName(profile.role)}</span>
+              </div>
+            </div>
+            <div className={styles.infoItem}>
+              <IconCalendar size={16} className={styles.infoIcon} />
+              <div>
+                <span className={styles.infoLabel}>تاريخ الانضمام</span>
+                <span className={styles.infoValue}>
+                  {profile.created_at ? new Date(profile.created_at).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'}
+                </span>
+              </div>
+            </div>
           </div>
-          <h2 style={{ marginBottom: '0.2rem' }}>{user.name}</h2>
-          <span className="badge success" style={{ fontSize: '0.8rem' }}>{getRoleName(user.role)}</span>
+        </Card>
 
-          <div className="profile-info-grid" style={{ textAlign: 'right' }}>
-            <div className="profile-info-item">
-              <span className="profile-info-label">البريد الإلكتروني</span>
-              <span className="profile-info-value">{user.email}</span>
-            </div>
-            <div className="profile-info-item">
-              <span className="profile-info-label">النقاط</span>
-              <span className="profile-info-value" style={{ color: 'var(--accent)' }}>{user.points || 0} نقطة</span>
-            </div>
-            <div className="profile-info-item">
-              <span className="profile-info-label">الدور</span>
-              <span className="profile-info-value">{getRoleName(user.role)}</span>
-            </div>
-            <div className="profile-info-item">
-              <span className="profile-info-label">تاريخ الانضمام</span>
-              <span className="profile-info-value">
-                {user.created_at ? new Date(user.created_at).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'}
-              </span>
-            </div>
+        <Card padding="lg" animate className={styles.passwordCard}>
+          <div className={styles.passwordHeader}>
+            <IconLock size={18} />
+            <h3>تغيير كلمة المرور</h3>
           </div>
-        </div>
-
-        <div className="profile-card section-fade" style={{ animationDelay: '0.1s' }}>
-          <h3 style={{ marginBottom: '1rem' }}>تغيير كلمة المرور</h3>
-          <form onSubmit={handlePasswordChange}>
-            <div className="form-group">
-              <label>كلمة المرور الحالية</label>
-              <input
-                type="password"
-                className="form-control"
-                required
-                placeholder="••••••••"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label>كلمة المرور الجديدة</label>
-              <input
-                type="password"
-                className="form-control"
-                required
-                minLength="8"
-                placeholder="8 أحرف على الأقل"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
-            </div>
-            <button type="submit" className="btn" style={{ width: 'auto' }} disabled={changingPassword}>
-              {changingPassword ? 'جاري التغيير...' : 'تغيير كلمة المرور'}
-            </button>
+          <form onSubmit={handlePasswordChange} className={styles.passwordForm}>
+            <Input label="كلمة المرور الحالية" type="password" required placeholder="••••••••" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} />
+            <Input label="كلمة المرور الجديدة" type="password" required minLength="8" placeholder="8 أحرف على الأقل" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+            <Button type="submit" variant="primary" loading={changingPassword} style={{ alignSelf: 'flex-start' }}>
+              تغيير كلمة المرور
+            </Button>
           </form>
-        </div>
+        </Card>
       </div>
     </div>
   );

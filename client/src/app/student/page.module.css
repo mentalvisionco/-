@@ -1,0 +1,54 @@
+.view {
+  animation: viewReveal var(--duration-slower) var(--ease-out) both;
+}
+@keyframes viewReveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+}
+.statsGrid > :nth-child(1) { animation-delay: 0ms; }
+.statsGrid > :nth-child(2) { animation-delay: 60ms; }
+.statsGrid > :nth-child(3) { animation-delay: 120ms; }
+
+.progressCard { display: flex; flex-direction: column; }
+.progressCard > :first-child { flex: 1; }
+
+.sectionTitle {
+  font-size: var(--font-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-4);
+  letter-spacing: var(--tracking-tight);
+}
+
+.listGap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.listGap > :nth-child(1) { animation-delay: 0ms; }
+.listGap > :nth-child(2) { animation-delay: 50ms; }
+.listGap > :nth-child(3) { animation-delay: 100ms; }
+.listGap > :nth-child(4) { animation-delay: 150ms; }
+.listGap > :nth-child(5) { animation-delay: 200ms; }
+
+.pointsBadge {
+  font-size: var(--font-base) !important;
+  padding: var(--space-2) var(--space-4) !important;
+}
+
+.mobileTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+@media (max-width: 768px) {
+  .statsGrid { grid-template-columns: 1fr; gap: var(--space-3); }
+}

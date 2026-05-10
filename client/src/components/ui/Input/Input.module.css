@@ -1,0 +1,69 @@
+.wrapper { display: flex; flex-direction: column; gap: var(--space-1-5); }
+
+.label {
+  display: block;
+  font-size: var(--font-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  letter-spacing: var(--tracking-wide);
+}
+
+.inputWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  transition:
+    border-color var(--duration-normal) var(--ease-out),
+    box-shadow var(--duration-normal) var(--ease-out),
+    background var(--duration-normal) var(--ease-out);
+  line-height: var(--leading-normal);
+}
+
+.input::placeholder {
+  color: var(--text-disabled);
+  transition: color var(--duration-normal);
+}
+
+.input:hover:not(:focus):not(:disabled) {
+  border-color: var(--border-hover);
+  background: var(--surface-3);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-glow), var(--shadow-xs);
+  background: var(--surface-1);
+}
+
+.input:focus::placeholder { color: var(--text-tertiary); }
+.input:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ——— Sizes ——— */
+.sm .input { height: 32px; font-size: var(--font-sm); padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm); }
+.md .input { height: 38px; font-size: var(--font-base); }
+.lg .input { height: 44px; font-size: var(--font-md); padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); }
+
+/* ——— With icon ——— */
+.hasIcon .input { padding-right: var(--space-10); }
+.iconSlot {
+  position: absolute;
+  right: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-disabled);
+  pointer-events: none;
+  transition: color var(--duration-normal);
+}
+.inputWrap:focus-within .iconSlot { color: var(--accent); }
+
+.error { font-size: var(--font-xs); color: var(--red); margin-top: var(--space-1); }

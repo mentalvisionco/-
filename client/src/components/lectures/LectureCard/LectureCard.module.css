@@ -1,0 +1,84 @@
+.card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition:
+    border-color var(--duration-normal) var(--ease-out),
+    box-shadow var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out);
+  animation: cardIn var(--duration-slow) var(--ease-out) both;
+}
+
+/* Subtle side accent on hover */
+.card::after {
+  content: '';
+  position: absolute;
+  right: 0; top: 20%; bottom: 20%;
+  width: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+  opacity: 0;
+  transition: opacity var(--duration-normal);
+}
+
+.card:hover {
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-sm);
+  transform: translateX(-3px);
+}
+.card:hover::after { opacity: 1; }
+.card:active { transform: translateX(-3px) scale(0.99); transition-duration: var(--duration-instant); }
+
+.content { display: flex; align-items: center; gap: var(--space-4); flex: 1; min-width: 0; }
+
+.orderBadge {
+  width: 38px; height: 38px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--font-sm); font-weight: var(--weight-bold);
+  flex-shrink: 0;
+  transition: all var(--duration-normal);
+}
+
+.card:hover .orderBadge {
+  background: var(--accent-muted);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.info { flex: 1; min-width: 0; }
+.title {
+  font-size: var(--font-md); font-weight: var(--weight-semibold);
+  color: var(--text-primary); margin-bottom: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.desc {
+  font-size: var(--font-sm); color: var(--text-tertiary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.meta { display: flex; align-items: center; gap: var(--space-3); flex-shrink: 0; }
+.rating {
+  display: flex; align-items: center; gap: 3px;
+  font-size: var(--font-sm); font-weight: var(--weight-semibold); color: var(--amber);
+}
+.arrow {
+  color: var(--text-disabled); font-size: var(--font-lg);
+  transition: all var(--duration-normal);
+}
+.card:hover .arrow { transform: translateX(-4px); color: var(--accent); }
+
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
