@@ -28,21 +28,29 @@ async function setupDB() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
       description TEXT,
-      videoUrl TEXT,
+      materialUrl TEXT,
       orderNum INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT,
+      taskUrl TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS submissions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       userId INTEGER NOT NULL,
-      lectureId INTEGER NOT NULL,
+      taskId INTEGER NOT NULL,
       fileUrl TEXT NOT NULL,
       grade INTEGER,
       feedback TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(userId) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY(lectureId) REFERENCES lectures(id) ON DELETE CASCADE
+      FOREIGN KEY(taskId) REFERENCES tasks(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS ratings (
@@ -50,6 +58,7 @@ async function setupDB() {
       userId INTEGER NOT NULL,
       lectureId INTEGER NOT NULL,
       rating INTEGER CHECK(rating >= 1 AND rating <= 5),
+      comment TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(userId) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY(lectureId) REFERENCES lectures(id) ON DELETE CASCADE,
@@ -80,7 +89,7 @@ async function setupDB() {
       ['المحاضرة الثالثة: البرمجة', 'أساسيات JS', 'https://www.w3schools.com/html/mov_bbb.mp4', 3]
     ];
 
-    const insertLec = db.prepare('INSERT INTO lectures (title, description, videoUrl, orderNum) VALUES (?, ?, ?, ?)');
+    const insertLec = db.prepare('INSERT INTO lectures (title, description, materialUrl, orderNum) VALUES (?, ?, ?, ?)');
     for (const lec of lectures) {
       insertLec.run(...lec);
     }

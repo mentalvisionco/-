@@ -16,7 +16,6 @@ export function getToken() {
 
 export function logout() {
   if (typeof window !== 'undefined') {
-    if (!confirm('هل أنت متأكد من تسجيل الخروج؟')) return;
     localStorage.removeItem('lms_token');
     localStorage.removeItem('currentUser');
     window.location.href = '/';

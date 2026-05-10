@@ -83,45 +83,7 @@ function sanitize(str) {
 // =======================
 // مسارات المصادقة (Auth)
 // =======================
-app.post('/api/register', (req, res) => {
-  try {
-    const name = sanitize(req.body.name);
-    const email = sanitize(req.body.email);
-    const password = req.body.password;
-    const role = 'student'; // Security Fix: Force student role
 
-    // Validation
-    if (!name || name.length < 2) {
-      return res.status(400).json({ error: 'الاسم مطلوب (حرفين على الأقل)' });
-    }
-    if (!email || !isValidEmail(email)) {
-      return res.status(400).json({ error: 'بريد إلكتروني غير صالح' });
-    }
-    if (!password || password.length < 8) {
-      return res.status(400).json({ error: 'كلمة المرور مطلوبة (8 أحرف على الأقل)' });
-    }
-
-    // Check existing
-    const existing = dbGet('SELECT id FROM users WHERE email = ?', [email]);
-    if (existing) {
-      return res.status(400).json({ error: 'البريد الإلكتروني مسجل مسبقاً' });
-    }
-
-    const hashedPassword = bcrypt.hashSync(password, 10);
-    const result = dbRun(
-      'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
-      [name, email, hashedPassword, role]
-    );
-
-    const newUser = { id: result.lastInsertRowid, name, email, role };
-    const token = jwt.sign({ id: newUser.id, name, email, role }, SECRET_KEY, { expiresIn: '24h' });
-
-    res.status(201).json({ user: { ...newUser, points: 0 }, token });
-  } catch (error) {
-    console.error('Register error:', error.message);
-    res.status(500).json({ error: 'حدث خطأ في الخادم' });
-  }
-});
 
 app.post('/api/login', (req, res) => {
   try {
@@ -222,11 +184,11 @@ app.post('/api/submissions', authenticateToken, (req, res) => {
   }
 
   try {
-    const lectureId = parseInt(req.body.lectureId);
+    const taskId = parseInt(req.body.taskId);
     const fileUrl = sanitize(req.body.fileUrl);
 
-    if (!lectureId || isNaN(lectureId)) {
-      return res.status(400).json({ error: 'معرف المحاضرة مطلوب' });
+    if (!taskId || isNaN(taskId)) {
+      return res.status(400).json({ error: 'معرف المهمة مطلوب' });
     }
     if (!fileUrl) {
       return res.status(400).json({ error: 'رابط الملف مطلوب' });
@@ -235,15 +197,15 @@ app.post('/api/submissions', authenticateToken, (req, res) => {
       return res.status(400).json({ error: 'رابط الملف غير صالح' });
     }
 
-    // التحقق من وجود المحاضرة
-    const lecture = dbGet('SELECT id FROM lectures WHERE id = ?', [lectureId]);
-    if (!lecture) {
-      return res.status(404).json({ error: 'المحاضرة غير موجودة' });
+    // التحقق من وجود المهمة
+    const task = dbGet('SELECT id FROM tasks WHERE id = ?', [taskId]);
+    if (!task) {
+      return res.status(404).json({ error: 'المهمة غير موجودة' });
     }
 
     const existing = dbGet(
-      'SELECT id FROM submissions WHERE userId = ? AND lectureId = ?',
-      [req.user.id, lectureId]
+      'SELECT id FROM submissions WHERE userId = ? AND taskId = ?',
+      [req.user.id, taskId]
     );
 
     if (existing) {
@@ -251,8 +213,8 @@ app.post('/api/submissions', authenticateToken, (req, res) => {
       res.json({ message: 'تم تحديث التسليم بنجاح' });
     } else {
       dbRun(
-        'INSERT INTO submissions (userId, lectureId, fileUrl) VALUES (?, ?, ?)',
-        [req.user.id, lectureId, fileUrl]
+        'INSERT INTO submissions (userId, taskId, fileUrl) VALUES (?, ?, ?)',
+        [req.user.id, taskId, fileUrl]
       );
       
       // إضافة نقاط
@@ -295,10 +257,10 @@ app.get('/api/admin/submissions', authenticateToken, (req, res) => {
 
   try {
     const submissions = dbAll(`
-      SELECT s.*, u.name as studentName, l.title as lectureTitle 
+      SELECT s.*, u.name as studentName, t.title as taskTitle 
       FROM submissions s
       JOIN users u ON s.userId = u.id
-      JOIN lectures l ON s.lectureId = l.id
+      JOIN tasks t ON s.taskId = t.id
       ORDER BY s.id DESC
     `);
     res.json(submissions);
@@ -358,12 +320,12 @@ app.post('/api/admin/lectures', authenticateToken, (req, res) => {
     return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
   }
   try {
-    const { title, description, videoUrl } = req.body;
-    if (!title || !videoUrl) return res.status(400).json({ error: 'العنوان ورابط الفيديو مطلوبان' });
+    const { title, description, materialUrl } = req.body;
+    if (!title || !materialUrl) return res.status(400).json({ error: 'العنوان ورابط الماتيريال مطلوبان' });
     
     const count = dbGet('SELECT COUNT(*) as c FROM lectures').c || 0;
-    dbRun('INSERT INTO lectures (title, description, videoUrl, orderNum) VALUES (?, ?, ?, ?)', 
-      [sanitize(title), sanitize(description), sanitize(videoUrl), count + 1]);
+    dbRun('INSERT INTO lectures (title, description, materialUrl, orderNum) VALUES (?, ?, ?, ?)', 
+      [sanitize(title), sanitize(description), sanitize(materialUrl), count + 1]);
     
     res.json({ message: 'تمت إضافة المحاضرة بنجاح' });
   } catch (err) {
@@ -374,9 +336,9 @@ app.post('/api/admin/lectures', authenticateToken, (req, res) => {
 app.put('/api/admin/lectures/:id', authenticateToken, (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'غير مصرح' });
   try {
-    const { title, description, videoUrl } = req.body;
-    dbRun('UPDATE lectures SET title = ?, description = ?, videoUrl = ? WHERE id = ?',
-      [sanitize(title), sanitize(description), sanitize(videoUrl), req.params.id]);
+    const { title, description, materialUrl } = req.body;
+    dbRun('UPDATE lectures SET title = ?, description = ?, materialUrl = ? WHERE id = ?',
+      [sanitize(title), sanitize(description), sanitize(materialUrl), req.params.id]);
     res.json({ message: 'تم التعديل بنجاح' });
   } catch (err) {
     res.status(500).json({ error: 'حدث خطأ' });
@@ -389,7 +351,6 @@ app.delete('/api/admin/lectures/:id', authenticateToken, (req, res) => {
     const lecture = dbGet('SELECT id FROM lectures WHERE id = ?', [req.params.id]);
     if (!lecture) return res.status(404).json({ error: 'المحاضرة غير موجودة' });
     
-    dbRun('DELETE FROM submissions WHERE lectureId = ?', [req.params.id]);
     dbRun('DELETE FROM ratings WHERE lectureId = ?', [req.params.id]);
     dbRun('DELETE FROM lectures WHERE id = ?', [req.params.id]);
     res.json({ message: 'تم حذف المحاضرة بنجاح' });
@@ -402,14 +363,15 @@ app.post('/api/lectures/:id/rate', authenticateToken, (req, res) => {
   if (req.user.role !== 'student') return res.status(403).json({ error: 'للطلاب فقط' });
   try {
     const rating = parseInt(req.body.rating);
+    const comment = req.body.comment ? sanitize(req.body.comment) : null;
     const lectureId = req.params.id;
     if (rating < 1 || rating > 5) return res.status(400).json({ error: 'التقييم يجب أن يكون من 1 لـ 5' });
     
     const existing = dbGet('SELECT id FROM ratings WHERE userId = ? AND lectureId = ?', [req.user.id, lectureId]);
     if (existing) {
-      dbRun('UPDATE ratings SET rating = ? WHERE id = ?', [rating, existing.id]);
+      dbRun('UPDATE ratings SET rating = ?, comment = ? WHERE id = ?', [rating, comment, existing.id]);
     } else {
-      dbRun('INSERT INTO ratings (userId, lectureId, rating) VALUES (?, ?, ?)', [req.user.id, lectureId, rating]);
+      dbRun('INSERT INTO ratings (userId, lectureId, rating, comment) VALUES (?, ?, ?, ?)', [req.user.id, lectureId, rating, comment]);
     }
     res.json({ message: 'تم حفظ التقييم' });
   } catch (err) {
@@ -419,8 +381,82 @@ app.post('/api/lectures/:id/rate', authenticateToken, (req, res) => {
 
 app.get('/api/lectures/:id/my-rating', authenticateToken, (req, res) => {
   try {
-    const rating = dbGet('SELECT rating FROM ratings WHERE userId = ? AND lectureId = ?', [req.user.id, req.params.id]);
-    res.json({ rating: rating ? rating.rating : 0 });
+    const ratingData = dbGet('SELECT rating, comment FROM ratings WHERE userId = ? AND lectureId = ?', [req.user.id, req.params.id]);
+    res.json({ rating: ratingData ? ratingData.rating : 0, comment: ratingData ? ratingData.comment : '' });
+  } catch (err) {
+    res.status(500).json({ error: 'حدث خطأ' });
+  }
+});
+
+app.get('/api/admin/lectures/:id/ratings', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'viewer') {
+    return res.status(403).json({ error: 'غير مصرح' });
+  }
+  try {
+    const ratings = dbAll(`
+      SELECT r.rating, r.comment, r.created_at, u.name as studentName 
+      FROM ratings r
+      JOIN users u ON r.userId = u.id
+      WHERE r.lectureId = ?
+      ORDER BY r.created_at DESC
+    `, [req.params.id]);
+    res.json(ratings);
+  } catch (err) {
+    res.status(500).json({ error: 'حدث خطأ في جلب التقييمات' });
+  }
+});
+
+// =======================
+// مسارات التاسكات (Tasks)
+// =======================
+app.get('/api/tasks', authenticateToken, (req, res) => {
+  try {
+    const tasks = dbAll('SELECT * FROM tasks ORDER BY created_at DESC');
+    res.json(tasks);
+  } catch (error) {
+    console.error('Tasks error:', error.message);
+    res.status(500).json({ error: 'حدث خطأ في جلب المهام' });
+  }
+});
+
+app.post('/api/admin/tasks', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
+  }
+  try {
+    const { title, description, taskUrl } = req.body;
+    if (!title || !taskUrl) return res.status(400).json({ error: 'العنوان ورابط المهمة مطلوبان' });
+    
+    dbRun('INSERT INTO tasks (title, description, taskUrl) VALUES (?, ?, ?)', 
+      [sanitize(title), sanitize(description), sanitize(taskUrl)]);
+    
+    res.json({ message: 'تمت إضافة المهمة بنجاح' });
+  } catch (err) {
+    res.status(500).json({ error: 'حدث خطأ' });
+  }
+});
+
+app.put('/api/admin/tasks/:id', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'غير مصرح' });
+  try {
+    const { title, description, taskUrl } = req.body;
+    dbRun('UPDATE tasks SET title = ?, description = ?, taskUrl = ? WHERE id = ?',
+      [sanitize(title), sanitize(description), sanitize(taskUrl), req.params.id]);
+    res.json({ message: 'تم التعديل بنجاح' });
+  } catch (err) {
+    res.status(500).json({ error: 'حدث خطأ' });
+  }
+});
+
+app.delete('/api/admin/tasks/:id', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'غير مصرح' });
+  try {
+    const task = dbGet('SELECT id FROM tasks WHERE id = ?', [req.params.id]);
+    if (!task) return res.status(404).json({ error: 'المهمة غير موجودة' });
+    
+    dbRun('DELETE FROM submissions WHERE taskId = ?', [req.params.id]);
+    dbRun('DELETE FROM tasks WHERE id = ?', [req.params.id]);
+    res.json({ message: 'تم حذف المهمة بنجاح' });
   } catch (err) {
     res.status(500).json({ error: 'حدث خطأ' });
   }

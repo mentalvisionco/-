@@ -23,6 +23,12 @@ const IconLectures = () => (
   </svg>
 );
 
+const IconTasks = () => (
+  <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+  </svg>
+);
+
 const IconProfile = () => (
   <svg className="dropdown-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
@@ -52,21 +58,43 @@ export default function AdminDashboard() {
   const [students, setStudents] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [lectures, setLectures] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
 
   const [showLectureForm, setShowLectureForm] = useState(false);
   const [editLectureId, setEditLectureId] = useState(null);
   const [formTitle, setFormTitle] = useState('');
   const [formDesc, setFormDesc] = useState('');
-  const [formVideoUrl, setFormVideoUrl] = useState('');
+  const [formMaterialUrl, setFormMaterialUrl] = useState('');
+  
+  const [showTaskForm, setShowTaskForm] = useState(false);
+  const [editTaskId, setEditTaskId] = useState(null);
+  const [taskFormTitle, setTaskFormTitle] = useState('');
+  const [taskFormDesc, setTaskFormDesc] = useState('');
+  const [taskFormUrl, setTaskFormUrl] = useState('');
+  
+  const [showRatingsModal, setShowRatingsModal] = useState(false);
+  const [lectureRatings, setLectureRatings] = useState([]);
+  const [ratingsLectureTitle, setRatingsLectureTitle] = useState('');
 
   const openAddForm = () => {
-    setEditLectureId(null); setFormTitle(''); setFormDesc(''); setFormVideoUrl('');
+    setEditLectureId(null); setFormTitle(''); setFormDesc(''); setFormMaterialUrl('');
     setShowLectureForm(true);
   };
 
+  const openRatingsModal = async (lec) => {
+    try {
+      const res = await apiCall(`/admin/lectures/${lec.id}/ratings`);
+      setLectureRatings(res);
+      setRatingsLectureTitle(lec.title);
+      setShowRatingsModal(true);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
   const openEditForm = (lec) => {
-    setEditLectureId(lec.id); setFormTitle(lec.title); setFormDesc(lec.description || ''); setFormVideoUrl(lec.videoUrl || '');
+    setEditLectureId(lec.id); setFormTitle(lec.title); setFormDesc(lec.description || ''); setFormMaterialUrl(lec.materialUrl || '');
     setShowLectureForm(true);
   };
 
@@ -86,13 +114,43 @@ export default function AdminDashboard() {
     e.preventDefault();
     try {
       if (editLectureId) {
-        await apiCall(`/admin/lectures/${editLectureId}`, 'PUT', { title: formTitle, description: formDesc, videoUrl: formVideoUrl });
+        await apiCall(`/admin/lectures/${editLectureId}`, 'PUT', { title: formTitle, description: formDesc, materialUrl: formMaterialUrl });
         showToast('تم التعديل بنجاح', 'success');
       } else {
-        await apiCall('/admin/lectures', 'POST', { title: formTitle, description: formDesc, videoUrl: formVideoUrl });
+        await apiCall('/admin/lectures', 'POST', { title: formTitle, description: formDesc, materialUrl: formMaterialUrl });
         showToast('تمت الإضافة بنجاح', 'success');
       }
       setShowLectureForm(false); fetchData();
+    } catch (err) { showToast(err.message, 'error'); }
+  };
+
+  const openTaskAddForm = () => {
+    setEditTaskId(null); setTaskFormTitle(''); setTaskFormDesc(''); setTaskFormUrl('');
+    setShowTaskForm(true);
+  };
+
+  const openTaskEditForm = (task) => {
+    setEditTaskId(task.id); setTaskFormTitle(task.title); setTaskFormDesc(task.description || ''); setTaskFormUrl(task.taskUrl || '');
+    setShowTaskForm(true);
+  };
+
+  const handleDeleteTask = async (id, title) => {
+    if (!confirm(`هل أنت متأكد من حذف المهمة: "${title}"؟\nسيتم حذف جميع التسليمات المرتبطة بها.`)) return;
+    try { await apiCall(`/admin/tasks/${id}`, 'DELETE'); showToast('تم حذف المهمة بنجاح', 'success'); fetchData(); }
+    catch (err) { showToast(err.message, 'error'); }
+  };
+
+  const handleSaveTask = async (e) => {
+    e.preventDefault();
+    try {
+      if (editTaskId) {
+        await apiCall(`/admin/tasks/${editTaskId}`, 'PUT', { title: taskFormTitle, description: taskFormDesc, taskUrl: taskFormUrl });
+        showToast('تم التعديل بنجاح', 'success');
+      } else {
+        await apiCall('/admin/tasks', 'POST', { title: taskFormTitle, description: taskFormDesc, taskUrl: taskFormUrl });
+        showToast('تمت الإضافة بنجاح', 'success');
+      }
+      setShowTaskForm(false); fetchData();
     } catch (err) { showToast(err.message, 'error'); }
   };
 
@@ -116,10 +174,10 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [stdsRes, subsRes, lecsRes] = await Promise.all([
-        apiCall('/admin/students'), apiCall('/admin/submissions'), apiCall('/lectures')
+      const [stdsRes, subsRes, lecsRes, tasksRes] = await Promise.all([
+        apiCall('/admin/students'), apiCall('/admin/submissions'), apiCall('/lectures'), apiCall('/tasks')
       ]);
-      setStudents(stdsRes); setSubmissions(subsRes); setLectures(lecsRes);
+      setStudents(stdsRes); setSubmissions(subsRes); setLectures(lecsRes); setTasks(tasksRes);
     } catch (error) { showToast('خطأ في جلب بيانات الإدارة', 'error'); }
     finally { setLoading(false); }
   };
@@ -153,6 +211,11 @@ export default function AdminDashboard() {
           <li className="nav-item">
             <button className={`nav-link w-full text-right ${currentView === 'lectures' ? 'active' : ''}`} onClick={() => setCurrentView('lectures')}>
               <IconLectures />المحاضرات
+            </button>
+          </li>
+          <li className="nav-item">
+            <button className={`nav-link w-full text-right ${currentView === 'tasks' ? 'active' : ''}`} onClick={() => setCurrentView('tasks')}>
+              <IconTasks />التاسكات
             </button>
           </li>
         </ul>
@@ -214,7 +277,7 @@ export default function AdminDashboard() {
                   submissions.slice(0, 5).map(sub => (
                     <div key={sub.id} className="list-item">
                       <div>
-                        <h4>{sub.studentName} - {sub.lectureTitle}</h4>
+                        <h4>{sub.studentName} - {sub.taskTitle}</h4>
                         <small>
                           <a href={sub.fileUrl.startsWith('http') ? sub.fileUrl : '#'} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
                             عرض الملف المسلم
@@ -318,8 +381,8 @@ export default function AdminDashboard() {
                     <input type="text" className="form-control" value={formDesc} onChange={e => setFormDesc(e.target.value)} />
                   </div>
                   <div className="form-group">
-                    <label>رابط الفيديو</label>
-                    <input type="text" className="form-control" required value={formVideoUrl} onChange={e => setFormVideoUrl(e.target.value)} />
+                    <label>رابط الماتيريال</label>
+                    <input type="text" className="form-control" required value={formMaterialUrl} onChange={e => setFormMaterialUrl(e.target.value)} />
                   </div>
                   <div style={{ display: 'flex', gap: '1rem' }}>
                     <button type="submit" className="btn">حفظ</button>
@@ -343,7 +406,10 @@ export default function AdminDashboard() {
                         <small>({lec.ratingCount || 0} تقييم)</small>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button className="btn" style={{ width: 'auto', padding: '0.45rem 0.85rem', background: 'var(--surface-3)', color: 'var(--ink)', fontSize: '0.82rem' }} onClick={() => openRatingsModal(lec)}>
+                        عرض التقييمات
+                      </button>
                       {user.role === 'admin' && (
                         <>
                           <button className="btn" style={{ width: 'auto', padding: '0.45rem 0.85rem', background: 'var(--indigo)', fontSize: '0.82rem' }} onClick={() => openEditForm(lec)}>تعديل</button>
@@ -356,6 +422,111 @@ export default function AdminDashboard() {
               )}
             </div>
           </section>
+        )}
+
+        {/* Tasks View */}
+        {currentView === 'tasks' && (
+          <section className="section-fade" key="tasks">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <h3>إدارة التاسكات</h3>
+              {user.role === 'admin' && (
+                <button className="btn" style={{ width: 'auto', fontSize: '0.85rem' }} onClick={openTaskAddForm}>
+                  + إضافة مهمة
+                </button>
+              )}
+            </div>
+
+            {showTaskForm && (
+              <div className="stat-card section-fade" style={{ marginBottom: '1.5rem' }}>
+                <h4>{editTaskId ? 'تعديل المهمة' : 'إضافة مهمة جديدة'}</h4>
+                <form onSubmit={handleSaveTask} style={{ marginTop: '1rem' }}>
+                  <div className="form-group">
+                    <label>عنوان المهمة</label>
+                    <input type="text" className="form-control" required value={taskFormTitle} onChange={e => setTaskFormTitle(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>الوصف</label>
+                    <input type="text" className="form-control" value={taskFormDesc} onChange={e => setTaskFormDesc(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>رابط المهمة (تفاصيل الواجب)</label>
+                    <input type="text" className="form-control" required value={taskFormUrl} onChange={e => setTaskFormUrl(e.target.value)} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '1rem' }}>
+                    <button type="submit" className="btn">حفظ</button>
+                    <button type="button" className="btn" style={{ background: 'var(--surface-3)' }} onClick={() => setShowTaskForm(false)}>إلغاء</button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            <div className="list-group">
+              {tasks.length === 0 ? (
+                <p style={{ color: 'var(--ink-muted)', padding: '1rem' }}>لا توجد مهام. أضف مهمة جديدة.</p>
+              ) : (
+                tasks.map(task => (
+                  <div key={task.id} className="list-item">
+                    <div>
+                      <h4>{task.title}</h4>
+                      <small>{task.description || ''}</small>
+                      <div style={{ marginTop: '0.25rem' }}>
+                        <a href={task.taskUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.85rem', color: 'var(--accent)' }}>عرض تفاصيل المهمة</a>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      {user.role === 'admin' && (
+                        <>
+                          <button className="btn" style={{ width: 'auto', padding: '0.45rem 0.85rem', background: 'var(--indigo)', fontSize: '0.82rem' }} onClick={() => openTaskEditForm(task)}>تعديل</button>
+                          <button className="btn" style={{ width: 'auto', padding: '0.45rem 0.85rem', background: 'var(--red)', fontSize: '0.82rem' }} onClick={() => handleDeleteTask(task.id, task.title)}>حذف</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* Ratings Modal */}
+        {showRatingsModal && (
+          <div className="modal-overlay" onClick={() => setShowRatingsModal(false)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+            <div className="stat-card section-fade" onClick={e => e.stopPropagation()} style={{ width: '90%', maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto', position: 'relative' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h3 style={{ margin: 0 }}>تقييمات: {ratingsLectureTitle}</h3>
+                <button onClick={() => setShowRatingsModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--ink)' }}>&times;</button>
+              </div>
+              
+              {lectureRatings.length === 0 ? (
+                <p style={{ color: 'var(--ink-muted)' }}>لا توجد تقييمات لهذه المحاضرة حتى الآن.</p>
+              ) : (
+                <div className="list-group">
+                  {lectureRatings.map((rating, idx) => (
+                    <div key={idx} className="list-item" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', marginBottom: '0.5rem' }}>
+                        <strong style={{ fontSize: '0.95rem' }}>{rating.studentName}</strong>
+                        <span style={{ color: 'var(--amber)' }}>
+                          {'★'.repeat(rating.rating)}{'☆'.repeat(5 - rating.rating)}
+                        </span>
+                      </div>
+                      {rating.comment ? (
+                        <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--ink-muted)', background: 'var(--surface-2)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', width: '100%', boxSizing: 'border-box' }}>
+                          "{rating.comment}"
+                        </p>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--ink-ghost)', fontStyle: 'italic' }}>
+                          بدون تعليق
+                        </p>
+                      )}
+                      <small style={{ marginTop: '0.5rem', color: 'var(--ink-ghost)', fontSize: '0.75rem' }}>
+                        {new Date(rating.created_at).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}
+                      </small>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </main>
     </div>

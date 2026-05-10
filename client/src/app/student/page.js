@@ -44,31 +44,19 @@ const IconChevron = () => (
 export default function StudentDashboard() {
   const router = useRouter();
 
-  const getYouTubeEmbedUrl = (url) => {
-    if (!url) return null;
-    let videoId = null;
-    const watchMatch = url.match(/(?:youtube\.com|youtube-nocookie\.com)\/watch\?v=([\w-]+)/);
-    if (watchMatch) videoId = watchMatch[1];
-    if (!videoId) {
-      const shortMatch = url.match(/youtu\.be\/([\w-]+)/);
-      if (shortMatch) videoId = shortMatch[1];
-    }
-    if (!videoId) {
-      const embedMatch = url.match(/(?:youtube\.com|youtube-nocookie\.com)\/embed\/([\w-]+)/);
-      if (embedMatch) videoId = embedMatch[1];
-    }
-    return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
-  };
+
 
   const [user, setUser] = useState(null);
   const [currentView, setCurrentView] = useState('lectures');
   const [leaderboard, setLeaderboard] = useState([]);
   const [lectures, setLectures] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [taskUrls, setTaskUrls] = useState({});
   const [submissions, setSubmissions] = useState([]);
   const [activeLecture, setActiveLecture] = useState(null);
-  const [taskUrl, setTaskUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [currentRating, setCurrentRating] = useState(0);
+  const [currentComment, setCurrentComment] = useState('');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -96,11 +84,12 @@ export default function StudentDashboard() {
   const fetchData = async (currentUser) => {
     setLoading(true);
     try {
-      const [meRes, lecsRes, subsRes, leadRes] = await Promise.all([
+      const [meRes, lecsRes, subsRes, leadRes, tasksRes] = await Promise.all([
         apiCall('/me'),
         apiCall('/lectures'),
         apiCall('/submissions/me'),
-        apiCall('/leaderboard')
+        apiCall('/leaderboard'),
+        apiCall('/tasks')
       ]);
       const updatedUser = { ...currentUser, points: meRes.points };
       setCurrentUser(updatedUser);
@@ -108,6 +97,7 @@ export default function StudentDashboard() {
       setLectures(lecsRes);
       setSubmissions(subsRes);
       setLeaderboard(leadRes);
+      setTasks(tasksRes);
     } catch (error) {
       showToast('خطأ في جلب البيانات', 'error');
     } finally {
@@ -119,28 +109,31 @@ export default function StudentDashboard() {
     const lec = lectures.find(l => l.id === id);
     if (!lec) { showToast('المحاضرة غير متاحة', 'warning'); return; }
     setActiveLecture(lec);
-    const existingSub = submissions.find(s => s.lectureId === id);
-    setTaskUrl(existingSub ? existingSub.fileUrl : '');
     setCurrentView('singleLecture');
     try {
       const ratingRes = await apiCall(`/lectures/${id}/my-rating`);
       setCurrentRating(ratingRes.rating || 0);
-    } catch { setCurrentRating(0); }
+      setCurrentComment(ratingRes.comment || '');
+    } catch { 
+      setCurrentRating(0); 
+      setCurrentComment('');
+    }
   };
 
-  const handleRating = async (star) => {
+  const handleRating = async (star = currentRating) => {
+    if (star === 0) return showToast('يرجى اختيار تقييم المحاضرة', 'warning');
     try {
-      await apiCall(`/lectures/${activeLecture.id}/rate`, 'POST', { rating: star });
+      await apiCall(`/lectures/${activeLecture.id}/rate`, 'POST', { rating: star, comment: currentComment });
       setCurrentRating(star);
       showToast('تم حفظ التقييم، شكراً لك!', 'success');
     } catch (err) { showToast(err.message, 'error'); }
   };
 
-  const handleTaskSubmit = async (e) => {
+  const handleTaskSubmit = async (e, taskId) => {
     e.preventDefault();
-    if (!activeLecture) return;
     try {
-      const res = await apiCall('/submissions', 'POST', { lectureId: activeLecture.id, fileUrl: taskUrl });
+      const fileUrl = taskUrls[taskId] !== undefined ? taskUrls[taskId] : (submissions.find(s => s.taskId === taskId)?.fileUrl || '');
+      const res = await apiCall('/submissions', 'POST', { taskId, fileUrl });
       showToast(res.message || 'تم التسليم بنجاح', 'success');
       const [meRes, subsRes] = await Promise.all([apiCall('/me'), apiCall('/submissions/me')]);
       const updatedUser = { ...user, points: meRes.points };
@@ -224,19 +217,44 @@ export default function StudentDashboard() {
             <h3>حالة التاسكات</h3>
             <p style={{ marginBottom: '1.5rem' }}>تابع مهامك المعلقة والمنجزة</p>
             <div className="list-group">
-              {lectures.length === 0 ? (
+              {tasks.length === 0 ? (
                 <p style={{ color: 'var(--ink-muted)', padding: '1rem' }}>لا توجد مهام متاحة.</p>
               ) : (
-                lectures.map(lec => {
-                  const isCompleted = submissions.some(s => s.lectureId === lec.id);
+                tasks.map(task => {
+                  const isCompleted = submissions.some(s => s.taskId === task.id);
+                  const submission = submissions.find(s => s.taskId === task.id);
+                  const currentUrl = taskUrls[task.id] !== undefined ? taskUrls[task.id] : (submission ? submission.fileUrl : '');
                   return (
-                    <div key={lec.id} className="list-item" onClick={() => openLecture(lec.id)}>
-                      <div>
-                        <h4>مهمة: {lec.title}</h4>
+                    <div key={task.id} className="list-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '1rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                        <div>
+                          <h4>{task.title}</h4>
+                          <small>{task.description || ''}</small>
+                        </div>
+                        <span className={`badge ${isCompleted ? 'success' : 'danger'}`}>
+                          {isCompleted ? 'تم التسليم' : 'لم يتم التسليم'}
+                        </span>
                       </div>
-                      <span className={`badge ${isCompleted ? 'success' : 'danger'}`}>
-                        {isCompleted ? 'تم التسليم' : 'لم يتم التسليم'}
-                      </span>
+                      <a href={task.taskUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', fontSize: '0.85rem' }}>عرض تفاصيل المهمة</a>
+                      
+                      <div style={{ width: '100%', background: 'var(--surface-2)', padding: '1rem', borderRadius: 'var(--radius-sm)' }}>
+                        <form onSubmit={(e) => handleTaskSubmit(e, task.id)} style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                          <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: '200px' }}>
+                            <label>رابط الإنجاز (Drive / Github)</label>
+                            <input 
+                              type="url" 
+                              className="form-control" 
+                              required 
+                              placeholder="https://..." 
+                              value={currentUrl} 
+                              onChange={(e) => setTaskUrls({...taskUrls, [task.id]: e.target.value})} 
+                            />
+                          </div>
+                          <button type="submit" className="btn" style={{ width: 'auto', marginBottom: '2px' }}>
+                            {isCompleted ? 'تحديث' : 'تسليم'}
+                          </button>
+                        </form>
+                      </div>
                     </div>
                   );
                 })
@@ -333,9 +351,6 @@ export default function StudentDashboard() {
                         <h4>{lec.title}</h4>
                         <small>{lec.description || ''}</small>
                       </div>
-                      <span className={`badge ${isCompleted ? 'success' : 'danger'}`}>
-                        {isCompleted ? 'تم التسليم' : 'لم يتم التسليم'}
-                      </span>
                     </div>
                   );
                 })
@@ -358,41 +373,35 @@ export default function StudentDashboard() {
               <h2>{activeLecture.title}</h2>
               <p style={{ marginBottom: '1.5rem' }}>{activeLecture.description || ''}</p>
 
-              <div style={{ width: '100%', height: '360px', background: '#000', borderRadius: 'var(--radius)', overflow: 'hidden', marginBottom: '2rem', border: '1px solid var(--surface-3)' }}>
-                {activeLecture.videoUrl && getYouTubeEmbedUrl(activeLecture.videoUrl) ? (
-                  <iframe width="100%" height="100%" src={getYouTubeEmbedUrl(activeLecture.videoUrl)} frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe>
-                ) : (
-                  <video src={activeLecture.videoUrl} controls style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                )}
-              </div>
-
-              <div style={{ borderTop: '1px solid var(--surface-3)', paddingTop: '1.5rem' }}>
-                <h3>تسليم المهمة</h3>
-                {submissions.some(s => s.lectureId === activeLecture.id) && (
-                  <div style={{ background: 'var(--green-soft)', color: 'var(--green)', padding: '0.65rem 1rem', borderRadius: 'var(--radius-sm)', marginTop: '0.75rem', fontSize: '0.88rem', fontWeight: '500' }}>
-                    ✅ تم تسليم هذه المهمة مسبقًا — يمكنك تحديث الرابط
-                  </div>
-                )}
-                <form style={{ marginTop: '0.85rem' }} onSubmit={handleTaskSubmit}>
-                  <div className="form-group">
-                    <label>رابط ملف الإنجاز (Drive / Github)</label>
-                    <input type="url" className="form-control" required placeholder="https://..." value={taskUrl} onChange={(e) => setTaskUrl(e.target.value)} />
-                  </div>
-                  <button type="submit" className="btn" style={{ width: 'auto' }}>
-                    {submissions.some(s => s.lectureId === activeLecture.id) ? 'تحديث التسليم' : 'تسليم'}
-                  </button>
-                </form>
+              <div style={{ width: '100%', background: 'var(--surface-2)', borderRadius: 'var(--radius)', overflow: 'hidden', marginBottom: '2rem', border: '1px solid var(--surface-3)', padding: '2rem', textAlign: 'center' }}>
+                <h3>ماتيريال المحاضرة</h3>
+                <p style={{ color: 'var(--ink-muted)', marginBottom: '1.5rem' }}>يمكنك الوصول إلى محتوى المحاضرة من خلال الرابط أدناه.</p>
+                <a href={activeLecture.materialUrl} target="_blank" rel="noopener noreferrer" className="btn" style={{ width: 'auto', display: 'inline-block' }}>
+                  عرض الماتيريال
+                </a>
               </div>
 
               <div style={{ borderTop: '1px solid var(--surface-3)', paddingTop: '1.5rem', marginTop: '1.5rem' }}>
                 <h3>تقييم المحاضرة</h3>
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.85rem', fontSize: '1.5rem', cursor: 'pointer' }}>
                   {[1, 2, 3, 4, 5].map(star => (
-                    <span key={star} className="star" onClick={() => handleRating(star)} style={{ color: star <= currentRating ? 'var(--amber)' : 'var(--ink-ghost)' }}>
+                    <span key={star} className="star" onClick={() => setCurrentRating(star)} style={{ color: star <= currentRating ? 'var(--amber)' : 'var(--ink-ghost)' }}>
                       {star <= currentRating ? '★' : '☆'}
                     </span>
                   ))}
                 </div>
+                <div className="form-group" style={{ marginTop: '1rem' }}>
+                  <textarea 
+                    className="form-control" 
+                    placeholder="أضف تعليقاً يصف تجربتك في هذه المحاضرة (اختياري)..." 
+                    value={currentComment} 
+                    onChange={e => setCurrentComment(e.target.value)}
+                    rows="3"
+                  />
+                </div>
+                <button className="btn" style={{ width: 'auto', marginTop: '0.5rem' }} onClick={() => handleRating(currentRating)}>
+                  حفظ التقييم
+                </button>
               </div>
             </div>
           </section>
