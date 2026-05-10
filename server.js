@@ -10,11 +10,16 @@ const { setupDB, dbGet, dbAll, dbRun } = require('./database');
 // ==============================
 const app = express();
 const PORT = process.env.PORT || 5000;
-const SECRET_KEY = process.env.SECRET_KEY || 'lms_super_secret_key_123';
-if (!process.env.SECRET_KEY && process.env.NODE_ENV === 'production') {
-  console.error('FATAL ERROR: SECRET_KEY is not defined.');
-  process.exit(1);
+const SECRET_KEY = process.env.SECRET_KEY;
+if (!SECRET_KEY) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('FATAL ERROR: SECRET_KEY is not defined in production environment.');
+    process.exit(1);
+  } else {
+    console.warn('WARNING: SECRET_KEY is not defined. Using an insecure fallback for development only.');
+  }
 }
+const ACTIVE_SECRET_KEY = SECRET_KEY || 'lms_super_secret_key_123';
 
 // Middleware
 app.use(cors());
@@ -60,7 +65,7 @@ function authenticateToken(req, res, next) {
   }
   
   try {
-    const user = jwt.verify(token, SECRET_KEY);
+    const user = jwt.verify(token, ACTIVE_SECRET_KEY);
     req.user = user;
     next();
   } catch (err) {
@@ -105,7 +110,7 @@ app.post('/api/login', (req, res) => {
     }
 
     const tokenPayload = { id: user.id, name: user.name, email: user.email, role: user.role };
-    const token = jwt.sign(tokenPayload, SECRET_KEY, { expiresIn: '24h' });
+    const token = jwt.sign(tokenPayload, ACTIVE_SECRET_KEY, { expiresIn: '24h' });
 
     res.json({ user: { ...tokenPayload, points: user.points }, token });
   } catch (error) {

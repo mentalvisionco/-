@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiCall, getCurrentUser, logout, showToast } from '@/lib/api';
-
+import Image from 'next/image';
 // SVG Icons
 const IconDashboard = () => (
   <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -99,13 +99,13 @@ export default function AdminDashboard() {
   };
 
   const handleDeleteLecture = async (id, title) => {
-    if (!confirm(`هل أنت متأكد من حذف المحاضرة: "${title}"؟\nسيتم حذف جميع التسليمات والتقييمات المرتبطة بها.`)) return;
+    if (!window.confirm(`هل أنت متأكد من حذف المحاضرة: "${title}"؟\nسيتم حذف جميع التسليمات والتقييمات المرتبطة بها.`)) return;
     try { await apiCall(`/admin/lectures/${id}`, 'DELETE'); showToast('تم حذف المحاضرة بنجاح', 'success'); fetchData(); }
     catch (err) { showToast(err.message, 'error'); }
   };
 
   const handleDeleteStudent = async (id, name) => {
-    if (!confirm(`هل أنت متأكد من حذف حساب الطالب: "${name}"؟\nسيتم حذف جميع بياناته وتسليماته بشكل نهائي.`)) return;
+    if (!window.confirm(`هل أنت متأكد من حذف حساب الطالب: "${name}"؟\nسيتم حذف جميع بياناته وتسليماته بشكل نهائي.`)) return;
     try { await apiCall(`/admin/students/${id}`, 'DELETE'); showToast('تم حذف الطالب بنجاح', 'success'); fetchData(); }
     catch (err) { showToast(err.message, 'error'); }
   };
@@ -135,7 +135,7 @@ export default function AdminDashboard() {
   };
 
   const handleDeleteTask = async (id, title) => {
-    if (!confirm(`هل أنت متأكد من حذف المهمة: "${title}"؟\nسيتم حذف جميع التسليمات المرتبطة بها.`)) return;
+    if (!window.confirm(`هل أنت متأكد من حذف المهمة: "${title}"؟\nسيتم حذف جميع التسليمات المرتبطة بها.`)) return;
     try { await apiCall(`/admin/tasks/${id}`, 'DELETE'); showToast('تم حذف المهمة بنجاح', 'success'); fetchData(); }
     catch (err) { showToast(err.message, 'error'); }
   };
@@ -152,6 +152,17 @@ export default function AdminDashboard() {
       }
       setShowTaskForm(false); fetchData();
     } catch (err) { showToast(err.message, 'error'); }
+  };
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [stdsRes, subsRes, lecsRes, tasksRes] = await Promise.all([
+        apiCall('/admin/students'), apiCall('/admin/submissions'), apiCall('/lectures'), apiCall('/tasks')
+      ]);
+      setStudents(stdsRes); setSubmissions(subsRes); setLectures(lecsRes); setTasks(tasksRes);
+    } catch (error) { showToast('خطأ في جلب بيانات الإدارة', 'error'); }
+    finally { setLoading(false); }
   };
 
   useEffect(() => {
@@ -171,16 +182,7 @@ export default function AdminDashboard() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [stdsRes, subsRes, lecsRes, tasksRes] = await Promise.all([
-        apiCall('/admin/students'), apiCall('/admin/submissions'), apiCall('/lectures'), apiCall('/tasks')
-      ]);
-      setStudents(stdsRes); setSubmissions(subsRes); setLectures(lecsRes); setTasks(tasksRes);
-    } catch (error) { showToast('خطأ في جلب بيانات الإدارة', 'error'); }
-    finally { setLoading(false); }
-  };
+  // Moved fetchData above useEffect
 
   if (!user || loading) {
     return <div className="loading" style={{ height: '100vh' }}>جاري تحميل البيانات...</div>;
@@ -195,7 +197,7 @@ export default function AdminDashboard() {
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="brand">
-          <img src="/logo.svg" alt="Mental Vision" className="logo-img" />
+          <Image src="/logo.svg" alt="Mental Vision" width={120} height={40} className="logo-img" />
         </div>
         <ul className="nav-links">
           <li className="nav-item">
@@ -511,7 +513,7 @@ export default function AdminDashboard() {
                       </div>
                       {rating.comment ? (
                         <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--ink-muted)', background: 'var(--surface-2)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', width: '100%', boxSizing: 'border-box' }}>
-                          "{rating.comment}"
+                          &quot;{rating.comment}&quot;
                         </p>
                       ) : (
                         <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--ink-ghost)', fontStyle: 'italic' }}>

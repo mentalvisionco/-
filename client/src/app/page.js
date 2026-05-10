@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiCall, setToken, setCurrentUser, getCurrentUser, getToken, showToast } from '@/lib/api';
+import Image from 'next/image';
 
 export default function AuthPage() {
   const router = useRouter();
@@ -11,15 +12,6 @@ export default function AuthPage() {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
 
-  useEffect(() => {
-    // Check if already logged in
-    const currentUser = getCurrentUser();
-    const token = getToken();
-    if (currentUser && token) {
-      redirectUser(currentUser.role);
-    }
-  }, []);
-
   const redirectUser = (role) => {
     if (role === 'admin' || role === 'viewer') {
       router.push('/admin');
@@ -27,6 +19,16 @@ export default function AuthPage() {
       router.push('/student');
     }
   };
+
+  useEffect(() => {
+    // Check if already logged in
+    const currentUser = getCurrentUser();
+    const token = getToken();
+    if (currentUser && token) {
+      redirectUser(currentUser.role);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -50,7 +52,7 @@ export default function AuthPage() {
       {/* Login Card */}
       <div className="auth-card" id="loginCard">
           <div className="auth-header">
-            <img src="/logo.svg" alt="Mental Vision" className="logo-img" />
+            <Image src="/logo.svg" alt="Mental Vision" width={120} height={40} className="logo-img" />
             <p style={{ textAlign: 'center' }}>سجّل دخولك لمتابعة رحلتك التدريبية</p>
           </div>
           <form onSubmit={handleLogin}>

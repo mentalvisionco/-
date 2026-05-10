@@ -12,17 +12,7 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
 
-  useEffect(() => {
-    const currentUser = getCurrentUser();
-    const token = getToken();
-    if (!currentUser || !token) {
-      router.push('/');
-      return;
-    }
-    fetchProfile();
-  }, []);
-
-  const fetchProfile = async () => {
+  async function fetchProfile() {
     try {
       const me = await apiCall('/me');
       setUser(me);
@@ -31,7 +21,19 @@ export default function ProfilePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  useEffect(() => {
+    const currentUser = getCurrentUser();
+    const token = getToken();
+    if (!currentUser || !token) {
+      router.push('/');
+      return;
+    }
+    fetchProfile();
+  }, [router]);
+
+  // Moved fetchProfile
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiCall, getCurrentUser, setCurrentUser, logout, showToast } from '@/lib/api';
-
+import Image from 'next/image';
 // SVG Icons as components
 const IconLectures = () => (
   <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -60,27 +60,6 @@ export default function StudentDashboard() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  useEffect(() => {
-    const currentUser = getCurrentUser();
-    if (!currentUser || currentUser.role !== 'student') {
-      logout();
-      return;
-    }
-    setUser(currentUser);
-    fetchData(currentUser);
-  }, []);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handleClick = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
   const fetchData = async (currentUser) => {
     setLoading(true);
     try {
@@ -104,6 +83,30 @@ export default function StudentDashboard() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const currentUser = getCurrentUser();
+    if (!currentUser || currentUser.role !== 'student') {
+      logout();
+      return;
+    }
+    setUser(currentUser);
+    fetchData(currentUser);
+  }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  // Moved fetchData above useEffect
+
 
   const openLecture = async (id) => {
     const lec = lectures.find(l => l.id === id);
@@ -156,7 +159,7 @@ export default function StudentDashboard() {
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="brand">
-          <img src="/logo.svg" alt="Mental Vision" className="logo-img" />
+          <Image src="/logo.svg" alt="Mental Vision" width={120} height={40} className="logo-img" />
         </div>
         <ul className="nav-links">
           <li className="nav-item">
