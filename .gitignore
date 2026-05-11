@@ -6,3 +6,4 @@ database.sqlite-wal
 .next/
 .next_temp/
 out/
+backups/

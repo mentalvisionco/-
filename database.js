@@ -64,6 +64,33 @@ async function setupDB() {
       FOREIGN KEY(lectureId) REFERENCES lectures(id) ON DELETE CASCADE,
       UNIQUE(userId, lectureId)
     );
+
+    CREATE TABLE IF NOT EXISTS attendance_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT,
+      notes TEXT,
+      lectureId INTEGER,
+      attendanceDate TEXT NOT NULL,
+      bonusPoints INTEGER DEFAULT 10,
+      isLocked INTEGER DEFAULT 0,
+      createdBy INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(lectureId) REFERENCES lectures(id) ON DELETE SET NULL,
+      FOREIGN KEY(createdBy) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS attendance_records (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sessionId INTEGER NOT NULL,
+      studentId INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'absent' CHECK(status IN ('present', 'absent', 'late')),
+      awardedPoints INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(sessionId) REFERENCES attendance_sessions(id) ON DELETE CASCADE,
+      FOREIGN KEY(studentId) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(sessionId, studentId)
+    );
   `);
 
   // Default Users

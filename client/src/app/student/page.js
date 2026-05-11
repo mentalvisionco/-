@@ -16,14 +16,16 @@ import LeaderboardList from '@/components/leaderboard/LeaderboardList/Leaderboar
 import Badge from '@/components/ui/Badge/Badge';
 import ProgressBar from '@/components/ui/ProgressBar/ProgressBar';
 import EmptyState from '@/components/ui/EmptyState/EmptyState';
+import StudentAttendance from '@/components/attendance/StudentAttendance/StudentAttendance';
 import { SkeletonCard, SkeletonList } from '@/components/ui/Skeleton/Skeleton';
-import { IconLectures, IconTasks, IconTrophy, IconBarChart, IconFileText } from '@/components/icons';
+import { IconLectures, IconTasks, IconTrophy, IconBarChart, IconFileText, IconClipboardCheck } from '@/components/icons';
 import Image from 'next/image';
 import styles from './page.module.css';
 
 const NAV_ITEMS = [
   { id: 'lectures', label: 'المحاضرات', icon: IconLectures, activeIds: ['lectures', 'singleLecture'] },
   { id: 'tasks', label: 'التاسكات', icon: IconTasks },
+  { id: 'attendance', label: 'الحضور', icon: IconClipboardCheck },
   { id: 'leaderboard', label: 'الليدربورد', icon: IconTrophy },
 ];
 
@@ -200,6 +202,13 @@ export default function StudentDashboard() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ═══ Attendance View ═══ */}
+      {currentView === 'attendance' && (
+        <div className={styles.view} key="attendance">
+          <StudentAttendance />
         </div>
       )}
 

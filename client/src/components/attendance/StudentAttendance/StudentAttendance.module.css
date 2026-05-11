@@ -1,0 +1,256 @@
+/* ——— Student Attendance View ——— */
+.attendanceView {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  animation: fadeIn var(--duration-slow) var(--ease-out);
+}
+
+/* ——— Stats Grid ——— */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+}
+
+.statBox {
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  animation: staggerFadeUp var(--duration-slow) var(--ease-out) both;
+}
+
+.statBox .statLabel {
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: var(--weight-semibold);
+}
+
+.statBox .statValue {
+  font-size: var(--font-2xl);
+  font-weight: var(--weight-bold);
+  color: var(--text-primary);
+  letter-spacing: var(--tracking-tight);
+}
+
+.statBox .statSub {
+  font-size: var(--font-sm);
+  color: var(--text-tertiary);
+}
+
+.statBox.accent { border-color: var(--accent-border); }
+.statBox.accent .statValue { color: var(--accent-text); }
+
+/* ——— Streak Badge ——— */
+.streakCard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+  background: linear-gradient(135deg, rgba(92, 214, 69, 0.08), rgba(92, 214, 69, 0.02));
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-lg);
+  animation: staggerFadeUp var(--duration-slow) var(--ease-out) both;
+}
+
+.streakIcon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-full);
+  background: var(--accent-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+  animation: breathe 3s ease-in-out infinite;
+}
+
+.streakInfo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.streakValue {
+  font-size: var(--font-xl);
+  font-weight: var(--weight-bold);
+  color: var(--accent-text);
+}
+
+.streakLabel {
+  font-size: var(--font-sm);
+  color: var(--text-tertiary);
+}
+
+/* ——— Attendance Badge ——— */
+.attendanceBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-full);
+  font-size: var(--font-md);
+  font-weight: var(--weight-semibold);
+  margin-bottom: var(--space-2);
+}
+
+.attendanceBadge.excellent {
+  background: var(--green-muted);
+  color: var(--green);
+}
+
+.attendanceBadge.good {
+  background: var(--blue-muted);
+  color: var(--blue);
+}
+
+.attendanceBadge.warning {
+  background: var(--amber-muted);
+  color: var(--amber);
+}
+
+.attendanceBadge.poor {
+  background: var(--red-muted);
+  color: var(--red);
+}
+
+/* ——— History List ——— */
+.sectionTitle {
+  font-size: var(--font-xl);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-4);
+}
+
+.historyList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.historyItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  transition: border-color var(--duration-fast);
+  animation: staggerFadeUp var(--duration-slow) var(--ease-out) both;
+}
+
+.historyItem:hover {
+  border-color: var(--border-hover);
+}
+
+.historyItem.present {
+  border-right: 3px solid var(--green);
+}
+
+.historyItem.absent {
+  border-right: 3px solid var(--red);
+  opacity: 0.85;
+}
+
+.historyItem.late {
+  border-right: 3px solid var(--amber);
+}
+
+.historyLeft {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+  min-width: 0;
+}
+
+.historyTitle {
+  font-size: var(--font-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.historyDate {
+  font-size: var(--font-sm);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+}
+
+.historyNotes {
+  font-size: var(--font-sm);
+  color: var(--text-tertiary);
+  font-style: italic;
+  margin-top: var(--space-1);
+}
+
+.historyRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1-5) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-bold);
+}
+
+.statusBadge.present {
+  background: var(--green-muted);
+  color: var(--green);
+}
+
+.statusBadge.absent {
+  background: var(--red-muted);
+  color: var(--red);
+}
+
+.statusBadge.late {
+  background: var(--amber-muted);
+  color: var(--amber);
+}
+
+.pointsBadge {
+  font-size: var(--font-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--accent-text);
+}
+
+/* ——— Responsive ——— */
+@media (max-width: 768px) {
+  .statsGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-3);
+  }
+
+  .historyItem {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+  }
+
+  .historyRight {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .streakCard {
+    padding: var(--space-4);
+  }
+}

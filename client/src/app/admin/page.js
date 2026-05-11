@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { apiCall } from '@/lib/api';
@@ -17,16 +17,20 @@ import Card from '@/components/ui/Card/Card';
 import Input from '@/components/ui/Input/Input';
 import EmptyState from '@/components/ui/EmptyState/EmptyState';
 import ConfirmDialog from '@/components/ui/ConfirmDialog/ConfirmDialog';
+import BackupPanel from '@/components/backup/BackupPanel/BackupPanel';
+import AttendancePanel from '@/components/attendance/AttendancePanel/AttendancePanel';
 import { SkeletonCard, SkeletonList, SkeletonTable } from '@/components/ui/Skeleton/Skeleton';
-import { IconDashboard, IconStudents, IconLectures, IconTasksAlt, IconPlus, IconEdit, IconTrash, IconSearch, IconExternalLink, IconStarFilled, IconEye, IconBarChart, IconFileText } from '@/components/icons';
+import { IconDashboard, IconStudents, IconLectures, IconTasksAlt, IconPlus, IconEdit, IconTrash, IconSearch, IconExternalLink, IconStarFilled, IconEye, IconBarChart, IconFileText, IconSettings, IconClipboardCheck } from '@/components/icons';
 import Image from 'next/image';
 import styles from './page.module.css';
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'نظرة عامة', icon: IconDashboard },
   { id: 'students', label: 'الطلاب', icon: IconStudents },
+  { id: 'attendance', label: 'الحضور', icon: IconClipboardCheck },
   { id: 'lectures', label: 'المحاضرات', icon: IconLectures },
   { id: 'tasks', label: 'التاسكات', icon: IconTasksAlt },
+  { id: 'tools', label: 'الأدوات', icon: IconSettings },
 ];
 
 export default function AdminDashboard() {
@@ -68,7 +72,7 @@ export default function AdminDashboard() {
   // Confirm dialog
   const [confirmState, setConfirmState] = useState({ open: false, title: '', message: '', onConfirm: null });
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [stds, subs, lecs, tsks] = await Promise.all([
@@ -77,12 +81,12 @@ export default function AdminDashboard() {
       setStudents(stds); setSubmissions(subs); setLectures(lecs); setTasks(tsks);
     } catch { toast.error('خطأ في جلب بيانات الإدارة'); }
     finally { setLoading(false); }
-  };
+  }, [toast]);
 
   useEffect(() => {
     if (ready && !isAdminOrViewer) { logout(); return; }
     if (ready && isAdminOrViewer) fetchData();
-  }, [ready]);
+  }, [ready, isAdminOrViewer, logout, fetchData]);
 
   // ——— Lecture handlers ———
   const openAddLecture = () => { setEditLectureId(null); setFormTitle(''); setFormDesc(''); setFormMaterialUrl(''); setShowLectureForm(true); };
@@ -409,6 +413,21 @@ export default function AdminDashboard() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ═══ Attendance View ═══ */}
+      {currentView === 'attendance' && (
+        <div className={styles.view} key="attendance">
+          <AttendancePanel />
+        </div>
+      )}
+
+      {/* ═══ Tools View ═══ */}
+      {currentView === 'tools' && (
+        <div className={styles.view} key="tools">
+          <Header title="الأدوات" subtitle="نسخ احتياطي واستعادة البيانات" />
+          <BackupPanel />
         </div>
       )}
 
