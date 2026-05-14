@@ -94,7 +94,7 @@ export default function AttendanceMarking({ sessionId, onBack }) {
   const filteredStudents = useMemo(() => {
     return students.filter(s =>
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.email.toLowerCase().includes(searchQuery.toLowerCase())
+      s.username.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [students, searchQuery]);
 
@@ -199,7 +199,7 @@ export default function AttendanceMarking({ sessionId, onBack }) {
                 <div className={styles.avatar}>{initials}</div>
                 <div>
                   <div className={styles.studentName}>{student.name}</div>
-                  <div className={styles.studentEmail}>{student.email}</div>
+                  <div className={styles.studentEmail} dir="ltr">{student.username}</div>
                 </div>
               </div>
 

@@ -77,8 +77,8 @@ function authenticateToken(req, res, next) {
 // ==============================
 // Input Validation Helpers
 // ==============================
-function isValidEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+function isValidUsername(username) {
+  return /^[^\s]+$/.test(username);
 }
 
 function sanitize(str) {
@@ -93,14 +93,14 @@ function sanitize(str) {
 
 app.post('/api/login', (req, res) => {
   try {
-    const email = sanitize(req.body.email);
+    const username = sanitize(req.body.username);
     const password = req.body.password;
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'البريد وكلمة المرور مطلوبان' });
+    if (!username || !password) {
+      return res.status(400).json({ error: 'اسم المستخدم وكلمة المرور مطلوبان' });
     }
 
-    const user = dbGet('SELECT * FROM users WHERE email = ?', [email]);
+    const user = dbGet('SELECT * FROM users WHERE username = ?', [username]);
     if (!user) {
       return res.status(400).json({ error: 'بيانات الدخول غير صحيحة' });
     }
@@ -110,7 +110,7 @@ app.post('/api/login', (req, res) => {
       return res.status(400).json({ error: 'بيانات الدخول غير صحيحة' });
     }
 
-    const tokenPayload = { id: user.id, name: user.name, email: user.email, role: user.role };
+    const tokenPayload = { id: user.id, name: user.name, username: user.username, role: user.role };
     const token = jwt.sign(tokenPayload, ACTIVE_SECRET_KEY, { expiresIn: '24h' });
 
     res.json({ user: { ...tokenPayload, points: user.points }, token });
@@ -122,7 +122,7 @@ app.post('/api/login', (req, res) => {
 
 app.get('/api/me', authenticateToken, (req, res) => {
   try {
-    const user = dbGet('SELECT id, name, email, role, points, created_at FROM users WHERE id = ?', [req.user.id]);
+    const user = dbGet('SELECT id, name, username, role, points, created_at FROM users WHERE id = ?', [req.user.id]);
     if (!user) {
       return res.status(404).json({ error: 'المستخدم غير موجود' });
     }
@@ -283,7 +283,7 @@ app.get('/api/admin/students', authenticateToken, (req, res) => {
 
   try {
     const students = dbAll(`
-      SELECT u.id, u.name, u.email, u.points, 
+      SELECT u.id, u.name, u.username, u.points, 
              COUNT(s.id) as submissionsCount
       FROM users u 
       LEFT JOIN submissions s ON u.id = s.userId
@@ -327,22 +327,22 @@ app.post('/api/admin/students', authenticateToken, (req, res) => {
     return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
   }
   try {
-    const { name, email, password, points } = req.body;
-    if (!name || !email || !password) return res.status(400).json({ error: 'الاسم والبريد وكلمة المرور مطلوبة' });
-    if (!isValidEmail(email)) return res.status(400).json({ error: 'البريد الإلكتروني غير صالح' });
+    const { name, username, password, points } = req.body;
+    if (!name || !username || !password) return res.status(400).json({ error: 'الاسم واسم المستخدم وكلمة المرور مطلوبة' });
+    if (!isValidUsername(username)) return res.status(400).json({ error: 'اسم المستخدم يجب ألا يحتوي على مسافات' });
     if (password.length < 8) return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل' });
 
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanUsername = username.trim();
     const cleanName = sanitize(name);
 
-    const existing = dbGet('SELECT id FROM users WHERE email = ?', [cleanEmail]);
-    if (existing) return res.status(400).json({ error: 'البريد الإلكتروني مستخدم بالفعل' });
+    const existing = dbGet('SELECT id FROM users WHERE username = ?', [cleanUsername]);
+    if (existing) return res.status(400).json({ error: 'اسم المستخدم مستخدم بالفعل' });
 
     const hashedPassword = bcrypt.hashSync(password, 10);
     const p = parseInt(points) || 0;
 
-    dbRun('INSERT INTO users (name, email, password, role, points) VALUES (?, ?, ?, ?, ?)',
-      [cleanName, cleanEmail, hashedPassword, 'student', p]);
+    dbRun('INSERT INTO users (name, username, password, role, points) VALUES (?, ?, ?, ?, ?)',
+      [cleanName, cleanUsername, hashedPassword, 'student', p]);
     
     res.json({ message: 'تم إضافة الطالب بنجاح' });
   } catch (err) {
@@ -356,29 +356,29 @@ app.put('/api/admin/students/:id', authenticateToken, (req, res) => {
     return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
   }
   try {
-    const { name, email, password, points } = req.body;
-    if (!name || !email) return res.status(400).json({ error: 'الاسم والبريد مطلوبان' });
-    if (!isValidEmail(email)) return res.status(400).json({ error: 'البريد الإلكتروني غير صالح' });
+    const { name, username, password, points } = req.body;
+    if (!name || !username) return res.status(400).json({ error: 'الاسم واسم المستخدم مطلوبان' });
+    if (!isValidUsername(username)) return res.status(400).json({ error: 'اسم المستخدم يجب ألا يحتوي على مسافات' });
 
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanUsername = username.trim();
     const cleanName = sanitize(name);
 
     const student = dbGet('SELECT id FROM users WHERE id = ? AND role = ?', [req.params.id, 'student']);
     if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
 
-    const existingEmail = dbGet('SELECT id FROM users WHERE email = ? AND id != ?', [cleanEmail, req.params.id]);
-    if (existingEmail) return res.status(400).json({ error: 'البريد الإلكتروني مستخدم من قبل مستخدم آخر' });
+    const existingUsername = dbGet('SELECT id FROM users WHERE username = ? AND id != ?', [cleanUsername, req.params.id]);
+    if (existingUsername) return res.status(400).json({ error: 'اسم المستخدم مستخدم من قبل مستخدم آخر' });
 
     const p = parseInt(points) || 0;
 
     if (password && password.trim().length > 0) {
       if (password.length < 8) return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل' });
       const hashedPassword = bcrypt.hashSync(password, 10);
-      dbRun('UPDATE users SET name = ?, email = ?, password = ?, points = ? WHERE id = ?',
-        [cleanName, cleanEmail, hashedPassword, p, req.params.id]);
+      dbRun('UPDATE users SET name = ?, username = ?, password = ?, points = ? WHERE id = ?',
+        [cleanName, cleanUsername, hashedPassword, p, req.params.id]);
     } else {
-      dbRun('UPDATE users SET name = ?, email = ?, points = ? WHERE id = ?',
-        [cleanName, cleanEmail, p, req.params.id]);
+      dbRun('UPDATE users SET name = ?, username = ?, points = ? WHERE id = ?',
+        [cleanName, cleanUsername, p, req.params.id]);
     }
     
     res.json({ message: 'تم التعديل بنجاح' });
@@ -718,7 +718,7 @@ app.get('/api/admin/attendance/sessions/:id/records', authenticateToken, (req, r
 
     // Get all students with their attendance status for this session
     const students = dbAll(`
-      SELECT u.id, u.name, u.email, u.points,
+      SELECT u.id, u.name, u.username, u.points,
              ar.status, ar.awardedPoints, ar.id as recordId
       FROM users u
       LEFT JOIN attendance_records ar ON u.id = ar.studentId AND ar.sessionId = ?

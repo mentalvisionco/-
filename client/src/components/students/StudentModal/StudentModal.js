@@ -14,7 +14,7 @@ export default function StudentModal({
 }) {
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
+    username: '',
     password: '',
     points: 0,
   });
@@ -26,14 +26,14 @@ export default function StudentModal({
       if (editId && initialData) {
         setFormData({
           name: initialData.name || '',
-          email: initialData.email || '',
+          username: initialData.username || '',
           password: '', // Optional on edit
           points: initialData.points || 0,
         });
       } else {
         setFormData({
           name: '',
-          email: '',
+          username: '',
           password: '',
           points: 0,
         });
@@ -46,10 +46,10 @@ export default function StudentModal({
   const validate = () => {
     const newErrors = {};
     if (!formData.name.trim()) newErrors.name = 'الاسم مطلوب';
-    if (!formData.email.trim()) {
-      newErrors.email = 'البريد الإلكتروني مطلوب';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'صيغة البريد الإلكتروني غير صحيحة';
+    if (!formData.username.trim()) {
+      newErrors.username = 'اسم المستخدم مطلوب';
+    } else if (/\\s/.test(formData.username)) {
+      newErrors.username = 'اسم المستخدم يجب ألا يحتوي على مسافات';
     }
     
     if (!editId && !formData.password) {
@@ -116,15 +116,15 @@ export default function StudentModal({
 
           <div className={styles.fieldGroup}>
             <Input
-              label="البريد الإلكتروني"
-              type="email"
-              value={formData.email}
-              onChange={handleChange('email')}
-              placeholder="student@example.com"
+              label="اسم المستخدم"
+              type="text"
+              value={formData.username}
+              onChange={handleChange('username')}
+              placeholder="student_user"
               dir="ltr"
               disabled={isSubmitting}
             />
-            {errors.email && <span className={styles.error}>{errors.email}</span>}
+            {errors.username && <span className={styles.error}>{errors.username}</span>}
           </div>
 
           <div className={styles.fieldGroup}>

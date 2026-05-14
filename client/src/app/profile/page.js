@@ -27,7 +27,7 @@ export default function ProfilePage() {
     if (ready && user) {
       apiCall('/me').then(setProfile).catch(() => toast.error('خطأ في جلب البيانات')).finally(() => setLoading(false));
     }
-  }, [ready]);
+  }, [ready, router, toast, user]);
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
@@ -65,8 +65,8 @@ export default function ProfilePage() {
             <div className={styles.infoItem}>
               <IconMail size={16} className={styles.infoIcon} />
               <div>
-                <span className={styles.infoLabel}>البريد الإلكتروني</span>
-                <span className={styles.infoValue}>{profile.email}</span>
+                <span className={styles.infoLabel}>اسم المستخدم</span>
+                <span className={styles.infoValue} dir="ltr">{profile.username}</span>
               </div>
             </div>
             <div className={styles.infoItem}>

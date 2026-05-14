@@ -15,7 +15,7 @@ export default function AuthPage() {
   const { user, login: authLogin, ready } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
   useEffect(() => {
@@ -32,7 +32,7 @@ export default function AuthPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const data = await apiCall('/login', 'POST', { email, password });
+      const data = await apiCall('/login', 'POST', { username, password });
       authLogin(data.user, data.token);
       toast.success('تم تسجيل الدخول بنجاح!');
       setTimeout(() => {
@@ -63,13 +63,13 @@ export default function AuthPage() {
 
         <form onSubmit={handleLogin} className={styles.form}>
           <Input
-            label="البريد الإلكتروني"
-            type="email"
+            label="اسم المستخدم"
+            type="text"
             required
-            placeholder="name@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
+            placeholder="اسم المستخدم"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            autoComplete="username"
             size="lg"
           />
           <Input

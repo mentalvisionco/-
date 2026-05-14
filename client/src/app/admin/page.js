@@ -200,7 +200,7 @@ export default function AdminDashboard() {
   const avgEng = totalExpected > 0 ? Math.round((submissions.length / totalExpected) * 100) : 0;
 
   const filteredStudents = students.filter(s =>
-    s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.email.toLowerCase().includes(searchQuery.toLowerCase())
+    s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.username.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const mobileHeader = (
@@ -256,7 +256,7 @@ export default function AdminDashboard() {
           <Header title="قائمة المتدربين" subtitle="حساب التقييم بناءً على الحضور والتسليم">
             <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
               <div className={styles.searchWrap}>
-                <Input icon={IconSearch} placeholder="بحث بالاسم أو البريد..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} size="sm" />
+                <Input icon={IconSearch} placeholder="بحث بالاسم أو اسم المستخدم..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} size="sm" />
               </div>
               {isAdmin && <Button variant="primary" size="md" icon={IconPlus} onClick={openAddStudent}>إضافة طالب</Button>}
             </div>
@@ -275,7 +275,7 @@ export default function AdminDashboard() {
                 <thead>
                   <tr>
                     <th>الطالب</th>
-                    <th>البريد</th>
+                    <th>اسم المستخدم</th>
                     <th>الدور</th>
                     <th>التسليمات</th>
                     <th>التقييم</th>
@@ -302,7 +302,7 @@ export default function AdminDashboard() {
                               <span>{s.name}</span>
                             </div>
                           </td>
-                          <td className={styles.emailCell}>{s.email}</td>
+                          <td className={styles.emailCell} dir="ltr">{s.username}</td>
                           <td><Badge variant="info">طالب</Badge></td>
                           <td>{s.submissionsCount} / {totalLectures}</td>
                           <td><Badge variant={variant}>{score} نقطة</Badge></td>

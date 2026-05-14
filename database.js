@@ -17,7 +17,7 @@ async function setupDB() {
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
+      username TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
       role TEXT DEFAULT 'student' CHECK(role IN ('student', 'admin', 'viewer')),
       points INTEGER DEFAULT 0,
@@ -100,11 +100,11 @@ async function setupDB() {
     const adminPass = bcrypt.hashSync('12345678', 10);
     const studentPass = bcrypt.hashSync('12345678', 10);
 
-    const insertUser = db.prepare('INSERT INTO users (name, email, password, role, points) VALUES (?, ?, ?, ?, ?)');
-    insertUser.run('مدير النظام', 'admin@lms.com', adminPass, 'admin', 0);
-    insertUser.run('طالب تجريبي', 'student@lms.com', studentPass, 'student', 150);
+    const insertUser = db.prepare('INSERT INTO users (name, username, password, role, points) VALUES (?, ?, ?, ?, ?)');
+    insertUser.run('مدير النظام', 'admin', adminPass, 'admin', 0);
+    insertUser.run('طالب تجريبي', 'student', studentPass, 'student', 150);
     
-    console.log('✅ Default users created (admin@lms.com / student@lms.com - password: 12345678)');
+    console.log('✅ Default users created (admin / student - password: 12345678)');
   }
 
   // Default Lectures
