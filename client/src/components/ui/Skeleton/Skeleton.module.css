@@ -1,4 +1,4 @@
-.skeletonBase {
+.skeleton {
   background: linear-gradient(
     90deg,
     var(--surface-2) 25%,
@@ -10,39 +10,65 @@
   border-radius: var(--radius-md);
 }
 
-@keyframes shimmer {
-  0% { background-position: 100% 50%; }
-  100% { background-position: -100% 50%; }
+.circle {
+  border-radius: 50%;
 }
 
-.skeletonLine {
-  composes: skeletonBase;
-  height: 14px;
-  width: 100%;
-  margin-bottom: var(--space-3);
-}
-
-.skeletonCard {
-  composes: skeletonBase;
-  height: 120px;
+.card {
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--surface-1);
 }
 
-.skeletonRow {
-  composes: skeletonBase;
-  height: 52px;
-  border-radius: var(--radius-lg);
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
-.skeletonTableWrap {
+.listItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.table {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
-.skeletonTableRow {
-  composes: skeletonBase;
-  height: 48px;
-  border-radius: 0;
-  margin-bottom: 1px;
+.tableHeader {
+  display: flex;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-subtle);
+  gap: var(--space-4);
+}
+
+.tableRow {
+  display: flex;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  gap: var(--space-4);
+}
+
+.tableRow:last-child {
+  border-bottom: none;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: -100% 50%;
+  }
 }
