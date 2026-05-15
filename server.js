@@ -966,7 +966,7 @@ function validateBackupSchema(data) {
   const warnings = [];
 
   for (const user of data.data.users) {
-    if (!user.id || !user.name || !user.email || !user.password || !user.role) {
+    if (!user.id || !user.name || (!user.username && !user.email) || !user.password || !user.role) {
       errors.push(`مستخدم غير مكتمل البيانات (ID: ${user.id || '?'})`);
     }
     if (user.role && !['student', 'admin', 'viewer'].includes(user.role)) {
@@ -1108,11 +1108,11 @@ app.post('/api/admin/validate-backup', authenticateToken, express.json({ limit: 
     };
 
     const conflicts = [];
-    // Check for email conflicts in imported users
-    const importedEmails = backupData.data.users.map(u => u.email);
-    const duplicateEmails = importedEmails.filter((e, i) => importedEmails.indexOf(e) !== i);
-    if (duplicateEmails.length > 0) {
-      conflicts.push(`يوجد ${duplicateEmails.length} بريد إلكتروني مكرر في النسخة الاحتياطية`);
+    // Check for username/email conflicts in imported users
+    const importedIdentifiers = backupData.data.users.map(u => u.username || u.email);
+    const duplicateIdentifiers = importedIdentifiers.filter((e, i) => importedIdentifiers.indexOf(e) !== i);
+    if (duplicateIdentifiers.length > 0) {
+      conflicts.push(`يوجد ${duplicateIdentifiers.length} حساب مكرر في النسخة الاحتياطية`);
     }
 
     res.json({
@@ -1172,8 +1172,8 @@ app.post('/api/admin/import', authenticateToken, express.json({ limit: '50mb' })
 
       for (const u of users) {
         dbRun(
-          'INSERT INTO users (id, name, email, password, role, points, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [u.id, sanitizeBackupString(u.name), sanitizeBackupString(u.email), u.password, u.role, u.points || 0, u.created_at || new Date().toISOString()]
+          'INSERT INTO users (id, name, username, password, role, points, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [u.id, sanitizeBackupString(u.name), sanitizeBackupString(u.username || u.email), u.password, u.role, u.points || 0, u.created_at || new Date().toISOString()]
         );
       }
 
@@ -1239,8 +1239,8 @@ app.post('/api/admin/import', authenticateToken, express.json({ limit: '50mb' })
         const rbAttRecords = rollbackData.data.attendance_records || [];
 
         for (const u of users) {
-          dbRun('INSERT INTO users (id, name, email, password, role, points, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [u.id, u.name, u.email, u.password, u.role, u.points || 0, u.created_at]);
+          dbRun('INSERT INTO users (id, name, username, password, role, points, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [u.id, u.name, u.username || u.email, u.password, u.role, u.points || 0, u.created_at]);
         }
         for (const l of lectures) {
           dbRun('INSERT INTO lectures (id, title, description, materialUrl, orderNum, created_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -1386,15 +1386,21 @@ app.delete('/api/admin/backups/:filename', authenticateToken, (req, res) => {
 });
 
 // ==============================
-// 404 Route
+// SPA Fallback Route
 // ==============================
 app.use((req, res) => {
   if (req.path.startsWith('/api')) {
     res.status(404).json({ error: 'Endpoint not found' });
   } else {
-    res.status(404).sendFile(path.join(__dirname, 'client', 'out', '404.html'), (err) => {
-      if (err) res.status(404).send('Not Found');
-    });
+    // Smart fallback: try to serve the base path HTML file to avoid hydration mismatch
+    const baseSegment = req.path.split('/')[1];
+    const possibleFile = path.join(__dirname, 'client', 'out', `${baseSegment}.html`);
+    
+    if (baseSegment && fs.existsSync(possibleFile)) {
+      res.sendFile(possibleFile);
+    } else {
+      res.sendFile(path.join(__dirname, 'client', 'out', 'index.html'));
+    }
   }
 });
 
