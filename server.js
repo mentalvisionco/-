@@ -404,8 +404,8 @@ app.post('/api/admin/lectures', authenticateToken, (req, res) => {
     const lectureId = result.lastInsertRowid;
     const today = new Date().toISOString().split('T')[0];
     dbRun(
-      'INSERT INTO attendance_sessions (title, description, lectureId, attendanceDate, bonusPoints, createdBy) VALUES (?, ?, ?, ?, ?, ?)',
-      [sanitize(title), sanitize(description || ''), lectureId, today, 10, req.user.id]
+      'INSERT INTO attendance_sessions (title, description, lectureId, attendanceDate, bonusPoints, latePoints, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [sanitize(title), sanitize(description || ''), lectureId, today, 10, 5, req.user.id]
     );
     
     res.json({ message: 'تمت إضافة المحاضرة وجلسة الحضور بنجاح' });
@@ -581,12 +581,16 @@ app.post('/api/admin/attendance/sessions', authenticateToken, (req, res) => {
     return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
   }
   try {
-    const { title, description, notes, lectureId, attendanceDate, bonusPoints } = req.body;
+    const { title, description, notes, lectureId, attendanceDate, bonusPoints, latePoints } = req.body;
     if (!title || !title.trim()) return res.status(400).json({ error: 'عنوان الجلسة مطلوب' });
     if (!attendanceDate) return res.status(400).json({ error: 'تاريخ الحضور مطلوب' });
 
     const bp = parseInt(bonusPoints) || 10;
-    if (bp < 0 || bp > 1000) return res.status(400).json({ error: 'النقاط يجب أن تكون بين 0 و 1000' });
+    if (bp < 0 || bp > 1000) return res.status(400).json({ error: 'نقاط الحضور يجب أن تكون بين 0 و 1000' });
+
+    // Handle latePoints: if not provided or invalid, default to 5.
+    const lp = latePoints !== undefined ? parseInt(latePoints) : 5;
+    if (lp < 0 || lp > 1000) return res.status(400).json({ error: 'نقاط التأخير يجب أن تكون بين 0 و 1000' });
 
     const lid = lectureId ? parseInt(lectureId) : null;
     if (lid) {
@@ -595,8 +599,8 @@ app.post('/api/admin/attendance/sessions', authenticateToken, (req, res) => {
     }
 
     const result = dbRun(
-      'INSERT INTO attendance_sessions (title, description, notes, lectureId, attendanceDate, bonusPoints, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [sanitize(title), sanitize(description || ''), sanitize(notes || ''), lid, attendanceDate, bp, req.user.id]
+      'INSERT INTO attendance_sessions (title, description, notes, lectureId, attendanceDate, bonusPoints, latePoints, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [sanitize(title), sanitize(description || ''), sanitize(notes || ''), lid, attendanceDate, bp, lp, req.user.id]
     );
 
     res.status(201).json({ message: 'تم إنشاء جلسة الحضور بنجاح', id: result.lastInsertRowid });
@@ -616,19 +620,23 @@ app.put('/api/admin/attendance/sessions/:id', authenticateToken, (req, res) => {
     if (!session) return res.status(404).json({ error: 'الجلسة غير موجودة' });
     if (session.isLocked) return res.status(400).json({ error: 'الجلسة مقفلة — يرجى فتحها أولاً قبل التعديل' });
 
-    const { title, description, notes, lectureId, attendanceDate, bonusPoints } = req.body;
+    const { title, description, notes, lectureId, attendanceDate, bonusPoints, latePoints } = req.body;
     if (!title || !title.trim()) return res.status(400).json({ error: 'عنوان الجلسة مطلوب' });
 
     const bp = parseInt(bonusPoints) || 10;
-    if (bp < 0 || bp > 1000) return res.status(400).json({ error: 'النقاط يجب أن تكون بين 0 و 1000' });
+    if (bp < 0 || bp > 1000) return res.status(400).json({ error: 'نقاط الحضور يجب أن تكون بين 0 و 1000' });
+
+    const lp = latePoints !== undefined ? parseInt(latePoints) : 5;
+    if (lp < 0 || lp > 1000) return res.status(400).json({ error: 'نقاط التأخير يجب أن تكون بين 0 و 1000' });
 
     const lid = lectureId ? parseInt(lectureId) : null;
 
-    // If bonus points changed, recalculate for all present/late students
-    if (bp !== session.bonusPoints) {
+    // If points changed, recalculate for all present/late students
+    if (bp !== session.bonusPoints || lp !== session.latePoints) {
       const records = dbAll('SELECT * FROM attendance_records WHERE sessionId = ? AND status IN (?, ?)', [req.params.id, 'present', 'late']);
       for (const rec of records) {
-        const diff = bp - rec.awardedPoints;
+        const targetPoints = rec.status === 'present' ? bp : lp;
+        const diff = targetPoints - rec.awardedPoints;
         if (diff !== 0) {
           // Safety: prevent negative points
           if (diff < 0) {
@@ -640,14 +648,14 @@ app.put('/api/admin/attendance/sessions/:id', authenticateToken, (req, res) => {
           } else {
             dbRun('UPDATE users SET points = points + ? WHERE id = ?', [diff, rec.studentId]);
           }
-          dbRun('UPDATE attendance_records SET awardedPoints = ? WHERE id = ?', [bp, rec.id]);
+          dbRun('UPDATE attendance_records SET awardedPoints = ? WHERE id = ?', [targetPoints, rec.id]);
         }
       }
     }
 
     dbRun(
-      'UPDATE attendance_sessions SET title = ?, description = ?, notes = ?, lectureId = ?, attendanceDate = ?, bonusPoints = ? WHERE id = ?',
-      [sanitize(title), sanitize(description || ''), sanitize(notes || ''), lid, attendanceDate || session.attendanceDate, bp, req.params.id]
+      'UPDATE attendance_sessions SET title = ?, description = ?, notes = ?, lectureId = ?, attendanceDate = ?, bonusPoints = ?, latePoints = ? WHERE id = ?',
+      [sanitize(title), sanitize(description || ''), sanitize(notes || ''), lid, attendanceDate || session.attendanceDate, bp, lp, req.params.id]
     );
 
     res.json({ message: 'تم تعديل الجلسة بنجاح' });
@@ -775,7 +783,7 @@ app.post('/api/admin/attendance/sessions/:id/records', authenticateToken, (req, 
           }
 
           // Award new points if present or late
-          const newAward = (status === 'present' || status === 'late') ? session.bonusPoints : 0;
+          const newAward = status === 'present' ? session.bonusPoints : (status === 'late' ? session.latePoints : 0);
           if (newAward > 0) {
             dbRun('UPDATE users SET points = points + ? WHERE id = ?', [newAward, studentId]);
             pointsChanged += newAward;
@@ -785,7 +793,7 @@ app.post('/api/admin/attendance/sessions/:id/records', authenticateToken, (req, 
         }
       } else {
         // New record
-        const award = (status === 'present' || status === 'late') ? session.bonusPoints : 0;
+        const award = status === 'present' ? session.bonusPoints : (status === 'late' ? session.latePoints : 0);
         dbRun(
           'INSERT INTO attendance_records (sessionId, studentId, status, awardedPoints) VALUES (?, ?, ?, ?)',
           [req.params.id, studentId, status, award]

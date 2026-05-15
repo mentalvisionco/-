@@ -38,7 +38,7 @@ export default function AttendancePanel() {
   const [showForm, setShowForm] = useState(false);
   const [editSession, setEditSession] = useState(null);
   const [formData, setFormData] = useState({
-    title: '', description: '', notes: '', lectureId: '', attendanceDate: '', bonusPoints: 10
+    title: '', description: '', notes: '', lectureId: '', attendanceDate: '', bonusPoints: 10, latePoints: 5
   });
 
   // Confirm
@@ -65,7 +65,7 @@ export default function AttendancePanel() {
   const openCreateForm = () => {
     setEditSession(null);
     const today = new Date().toISOString().split('T')[0];
-    setFormData({ title: '', description: '', notes: '', lectureId: '', attendanceDate: today, bonusPoints: 10 });
+    setFormData({ title: '', description: '', notes: '', lectureId: '', attendanceDate: today, bonusPoints: 10, latePoints: 5 });
     setShowForm(true);
   };
 
@@ -77,7 +77,8 @@ export default function AttendancePanel() {
       notes: session.notes || '',
       lectureId: session.lectureId || '',
       attendanceDate: session.attendanceDate,
-      bonusPoints: session.bonusPoints
+      bonusPoints: session.bonusPoints,
+      latePoints: session.latePoints !== undefined ? session.latePoints : 5
     });
     setShowForm(true);
   };
@@ -212,7 +213,7 @@ export default function AttendancePanel() {
                   <div className={styles.sessionMeta}>
                     <span className={styles.metaItem}><IconCalendar size={13} /> {session.attendanceDate}</span>
                     <span className={styles.metaItem}><IconStudents size={13} /> {session.totalRecords} طالب</span>
-                    <span className={styles.metaItem}>⭐ {session.bonusPoints} نقطة</span>
+                    <span className={styles.metaItem}>⭐ ح: {session.bonusPoints} | ت: {session.latePoints !== undefined ? session.latePoints : 5}</span>
                     {session.lectureTitle && <span className={styles.metaItem}>📖 {session.lectureTitle}</span>}
                   </div>
                   {session.totalRecords > 0 && (
@@ -361,11 +362,21 @@ export default function AttendancePanel() {
                     />
                   </div>
                   <div className={styles.fieldGroup}>
-                    <label className={styles.fieldLabel}>النقاط الإضافية</label>
+                    <label className={styles.fieldLabel}>نقاط الحضور</label>
                     <Input
                       type="number"
                       value={formData.bonusPoints}
                       onChange={e => setFormData({ ...formData, bonusPoints: parseInt(e.target.value) || 0 })}
+                      min="0"
+                      max="1000"
+                    />
+                  </div>
+                  <div className={styles.fieldGroup}>
+                    <label className={styles.fieldLabel}>نقاط التأخير</label>
+                    <Input
+                      type="number"
+                      value={formData.latePoints}
+                      onChange={e => setFormData({ ...formData, latePoints: parseInt(e.target.value) || 0 })}
                       min="0"
                       max="1000"
                     />

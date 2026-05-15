@@ -148,7 +148,7 @@ export default function AttendanceMarking({ sessionId, onBack }) {
         <div className={styles.sessionHeaderMeta}>
           <span className={styles.metaChip}><IconCalendar size={13} /> {session.attendanceDate}</span>
           <span className={styles.metaChip}><IconStudents size={13} /> {students.length} طالب</span>
-          <span className={styles.metaChip}>⭐ {session.bonusPoints} نقطة</span>
+          <span className={styles.metaChip}>⭐ حضور: {session.bonusPoints} | تأخير: {session.latePoints !== undefined ? session.latePoints : 5}</span>
         </div>
         {session.notes && (
           <div className={styles.sessionNotes}>📝 {session.notes}</div>
