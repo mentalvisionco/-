@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
@@ -44,7 +44,7 @@ export default function StudentDashboard() {
   const [currentRating, setCurrentRating] = useState(0);
   const [currentComment, setCurrentComment] = useState('');
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [meRes, lecsRes, subsRes, leadRes, tasksRes] = await Promise.all([
@@ -64,12 +64,12 @@ export default function StudentDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast, updateUser]);
 
   useEffect(() => {
     if (ready && !isStudent) { logout(); return; }
     if (ready && isStudent) fetchData();
-  }, [ready]);
+  }, [ready, isStudent, logout, fetchData]);
 
   const openLecture = async (id) => {
     const lec = lectures.find(l => l.id === id);
