@@ -7,126 +7,174 @@
 }
 
 .cardInner {
-  background-color: #1a1e23; /* Dark card background similar to image */
-  border-radius: 12px;
-  border: 2px solid #2a3038;
-  padding: 30px;
+  background-color: #1a1e22; /* Dark charcoal background */
+  border-radius: 4px;
+  padding: 10px;
   width: 100%;
-  max-width: 600px;
+  max-width: 700px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+.cardBorder {
+  border: 1px solid #6c9a75; /* Greenish inner border */
+  border-radius: 12px;
+  padding: 40px 30px;
   position: relative;
-  overflow: hidden;
 }
 
 /* Header Section */
 .header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 40px;
+  align-items: flex-start;
+  margin-bottom: 50px;
+}
+
+.logoLeft {
+  display: flex;
+  flex-direction: column;
+  color: #fff;
+  font-family: 'Brush Script MT', cursive, sans-serif;
+  line-height: 1;
+}
+
+.mental {
+  font-size: 1.5rem;
+  margin-bottom: -5px;
+}
+
+.vision {
+  font-size: 2.2rem;
+  font-weight: bold;
 }
 
 .titleBox {
-  border: 1px solid #4ade80; /* Greenish border from image */
-  padding: 8px 30px;
+  border: 1px solid #6c9a75; /* Same greenish border */
+  padding: 10px 40px;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .titleBox h2 {
-  color: #fff;
+  color: #e5e0d8;
   margin: 0;
-  font-size: 1.8rem;
-  letter-spacing: 2px;
+  font-size: 2.5rem;
+  letter-spacing: 3px;
   font-weight: 500;
+  font-family: 'Arial', sans-serif;
 }
 
-/* Add corner marks for the title box */
+/* Corner markers for the title box */
 .titleBox::before, .titleBox::after {
   content: '';
   position: absolute;
   width: 6px;
   height: 6px;
-  border: 1px solid #4ade80;
-  background: #1a1e23;
+  border: 1px solid #6c9a75;
+  background: #1a1e22;
 }
 
 .titleBox::before {
-  top: -3px;
-  left: -3px;
+  top: -4px;
+  left: -4px;
 }
 
 .titleBox::after {
-  bottom: -3px;
-  right: -3px;
+  bottom: -4px;
+  right: -4px;
 }
 
-/* Logos */
-.logoLeft, .logoRight {
-  flex: 0 0 80px;
+.logoRight {
+  border: 1px solid #6c9a75;
+  padding: 5px;
   display: flex;
-  justify-content: center;
   align-items: center;
 }
 
-.placeholderLogo {
-  color: #4ade80;
-  font-size: 0.8rem;
-  border-left: 1px solid #4ade80;
+.ghaithLogo {
+  color: #6c9a75;
+  text-align: right;
+  font-size: 0.7rem;
+  display: flex;
+  flex-direction: column;
   padding-left: 10px;
-  text-align: left;
+  border-left: 1px solid #6c9a75;
+}
+
+.ghaithAr {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.ghaithEn {
+  font-size: 0.6rem;
 }
 
 /* Grid for 12 circles */
 .grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 15px;
-  margin-top: 20px;
+  gap: 20px;
+  padding: 0 10px;
 }
 
 .circle {
   aspect-ratio: 1;
-  background-color: #d1d5db; /* Light grey/off-white circles */
+  background-color: #e6d5c3; /* Light beige matching the physical card */
   border-radius: 50%;
   display: flex;
   justify-content: center;
   align-items: center;
   position: relative;
-  transition: all 0.3s ease;
-  box-shadow: inset 0 2px 5px rgba(0,0,0,0.2);
+  box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
 }
 
-.circle.filled {
-  /* You can add a subtle change or keep it the same since the checkmark signifies it's filled */
-  background-color: #e5e7eb;
+/* Stamp mark (blue ink stamp) */
+.stamp {
+  width: 35%;
+  height: 70%;
+  background-color: #2b4570; /* Dark blue ink */
+  border-radius: 4px;
+  transform: rotate(-15deg);
+  opacity: 0.85;
+  position: relative;
+  
+  /* Texture to look like a stamp */
+  background-image: 
+    radial-gradient(circle, transparent 20%, #2b4570 20%, #2b4570 80%, transparent 80%, transparent),
+    radial-gradient(circle, transparent 20%, #2b4570 20%, #2b4570 80%, transparent 80%, transparent);
+  background-size: 4px 4px;
+  
+  /* Uneven edges */
+  mask-image: radial-gradient(white, black);
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  
+  animation: stampIn 0.2s ease-out forwards;
 }
 
-/* Stamp mark (Checkmark or seal) */
-.checkIcon {
-  width: 60%;
-  height: 60%;
-  color: #1e3a8a; /* Blue-ish stamp color from the image */
-  filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.2));
-  animation: stamp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+@keyframes stampIn {
+  0% { transform: scale(2) rotate(-30deg); opacity: 0; }
+  100% { transform: scale(1) rotate(-15deg); opacity: 0.85; }
 }
 
-@keyframes stamp {
-  0% { transform: scale(3) rotate(-20deg); opacity: 0; }
-  100% { transform: scale(1) rotate(0deg); opacity: 1; }
-}
-
-@media (max-width: 600px) {
+@media (max-width: 700px) {
   .grid {
-    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
   }
+  .titleBox h2 {
+    font-size: 1.8rem;
+  }
+}
+
+@media (max-width: 500px) {
   .header {
     flex-direction: column;
-    gap: 15px;
+    align-items: center;
+    gap: 20px;
   }
-}
-
-@media (max-width: 400px) {
   .grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 }
