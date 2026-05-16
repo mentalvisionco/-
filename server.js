@@ -122,7 +122,7 @@ app.post('/api/login', (req, res) => {
 
 app.get('/api/me', authenticateToken, (req, res) => {
   try {
-    const user = dbGet('SELECT id, name, username, role, points, created_at FROM users WHERE id = ?', [req.user.id]);
+    const user = dbGet('SELECT id, name, username, role, points, fill_card_count, created_at FROM users WHERE id = ?', [req.user.id]);
     if (!user) {
       return res.status(404).json({ error: 'المستخدم غير موجود' });
     }
@@ -223,9 +223,7 @@ app.post('/api/submissions', authenticateToken, (req, res) => {
         [req.user.id, taskId, fileUrl]
       );
       
-      // إضافة نقاط
-      dbRun('UPDATE users SET points = points + 50 WHERE id = ?', [req.user.id]);
-      res.status(201).json({ message: 'تم تسليم المهمة بنجاح وحصلت على 50 نقطة' });
+      res.status(201).json({ message: 'تم تسليم المهمة بنجاح، في انتظار تقييم المعلم' });
     }
   } catch (error) {
     console.error('Submission error:', error.message);
@@ -240,6 +238,43 @@ app.get('/api/submissions/me', authenticateToken, (req, res) => {
   } catch (error) {
     console.error('My submissions error:', error.message);
     res.status(500).json({ error: 'حدث خطأ' });
+  }
+});
+
+app.delete('/api/submissions/:taskId', authenticateToken, (req, res) => {
+  if (req.user.role !== 'student') {
+    return res.status(403).json({ error: 'غير مصرح - للطلاب فقط' });
+  }
+
+  try {
+    const taskId = parseInt(req.params.taskId);
+    if (!taskId || isNaN(taskId)) {
+      return res.status(400).json({ error: 'معرف المهمة مطلوب' });
+    }
+
+    const existing = dbGet(
+      'SELECT id, grade FROM submissions WHERE userId = ? AND taskId = ?',
+      [req.user.id, taskId]
+    );
+
+    if (!existing) {
+      return res.status(404).json({ error: 'لم يتم العثور على تسليم لهذه المهمة' });
+    }
+
+    if (existing.grade && existing.grade > 0) {
+      const student = dbGet('SELECT points FROM users WHERE id = ?', [req.user.id]);
+      if (student) {
+        let newPoints = student.points - existing.grade;
+        if (newPoints < 0) newPoints = 0;
+        dbRun('UPDATE users SET points = ? WHERE id = ?', [newPoints, req.user.id]);
+      }
+    }
+
+    dbRun('DELETE FROM submissions WHERE id = ?', [existing.id]);
+    res.json({ message: 'تم إلغاء التسليم بنجاح' });
+  } catch (error) {
+    console.error('Cancel submission error:', error.message);
+    res.status(500).json({ error: 'حدث خطأ أثناء إلغاء التسليم' });
   }
 });
 
@@ -276,6 +311,39 @@ app.get('/api/admin/submissions', authenticateToken, (req, res) => {
   }
 });
 
+app.put('/api/admin/submissions/:id/grade', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
+  }
+  try {
+    const { grade } = req.body;
+    const newGrade = parseInt(grade);
+    if (isNaN(newGrade) || newGrade < 0 || newGrade > 50) {
+      return res.status(400).json({ error: 'التقييم يجب أن يكون بين 0 و 50' });
+    }
+
+    const sub = dbGet('SELECT * FROM submissions WHERE id = ?', [req.params.id]);
+    if (!sub) return res.status(404).json({ error: 'التسليم غير موجود' });
+
+    const student = dbGet('SELECT points FROM users WHERE id = ?', [sub.userId]);
+    if (student) {
+      const oldGrade = sub.grade || 0;
+      let newPoints = student.points - oldGrade + newGrade;
+      if (newPoints < 0) newPoints = 0;
+      
+      dbRun('UPDATE users SET points = ? WHERE id = ?', [newPoints, sub.userId]);
+    }
+
+    dbRun('UPDATE submissions SET grade = ? WHERE id = ?', [newGrade, req.params.id]);
+
+    res.json({ message: 'تم التقييم بنجاح', grade: newGrade });
+  } catch (error) {
+    console.error('Grade error:', error.message);
+    res.status(500).json({ error: 'حدث خطأ أثناء التقييم' });
+  }
+});
+
+
 app.get('/api/admin/students', authenticateToken, (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'viewer') {
     return res.status(403).json({ error: 'غير مصرح - للإدارة أو المشاهدين فقط' });
@@ -283,7 +351,7 @@ app.get('/api/admin/students', authenticateToken, (req, res) => {
 
   try {
     const students = dbAll(`
-      SELECT u.id, u.name, u.username, u.points, 
+      SELECT u.id, u.name, u.username, u.points, u.fill_card_count,
              COUNT(s.id) as submissionsCount
       FROM users u 
       LEFT JOIN submissions s ON u.id = s.userId
@@ -296,6 +364,27 @@ app.get('/api/admin/students', authenticateToken, (req, res) => {
   } catch (error) {
     console.error('Admin students error:', error.message);
     res.status(500).json({ error: 'حدث خطأ' });
+  }
+});
+
+app.put('/api/admin/students/:id/fill-card', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
+  }
+  try {
+    const { action } = req.body; // 'increment' or 'decrement'
+    const student = dbGet('SELECT fill_card_count FROM users WHERE id = ? AND role = ?', [req.params.id, 'student']);
+    if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
+
+    let newCount = student.fill_card_count || 0;
+    if (action === 'increment' && newCount < 12) newCount++;
+    if (action === 'decrement' && newCount > 0) newCount--;
+
+    dbRun('UPDATE users SET fill_card_count = ? WHERE id = ?', [newCount, req.params.id]);
+    res.json({ message: 'تم التحديث بنجاح', fill_card_count: newCount });
+  } catch (error) {
+    console.error('Update fill card error:', error.message);
+    res.status(500).json({ error: 'حدث خطأ أثناء تحديث الفيل كارد' });
   }
 });
 

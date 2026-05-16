@@ -21,6 +21,7 @@ async function setupDB() {
       password TEXT NOT NULL,
       role TEXT DEFAULT 'student' CHECK(role IN ('student', 'admin', 'viewer')),
       points INTEGER DEFAULT 0,
+      fill_card_count INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -98,6 +99,14 @@ async function setupDB() {
   try {
     db.exec('ALTER TABLE attendance_sessions ADD COLUMN latePoints INTEGER DEFAULT 5');
     console.log('✅ Added latePoints column to attendance_sessions');
+  } catch (err) {
+    // Column already exists or table doesn't exist yet
+  }
+
+  // Migrate existing database to add fill_card_count if it doesn't exist
+  try {
+    db.exec('ALTER TABLE users ADD COLUMN fill_card_count INTEGER DEFAULT 0');
+    console.log('✅ Added fill_card_count column to users');
   } catch (err) {
     // Column already exists or table doesn't exist yet
   }

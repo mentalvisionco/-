@@ -17,8 +17,9 @@ import Badge from '@/components/ui/Badge/Badge';
 import ProgressBar from '@/components/ui/ProgressBar/ProgressBar';
 import EmptyState from '@/components/ui/EmptyState/EmptyState';
 import StudentAttendance from '@/components/attendance/StudentAttendance/StudentAttendance';
+import FillCard from '@/components/ui/FillCard/FillCard';
 import { SkeletonCard, SkeletonList } from '@/components/ui/Skeleton/Skeleton';
-import { IconLectures, IconTasks, IconTrophy, IconBarChart, IconFileText, IconClipboardCheck } from '@/components/icons';
+import { IconLectures, IconTasks, IconTrophy, IconBarChart, IconFileText, IconClipboardCheck, IconAward } from '@/components/icons';
 import Image from 'next/image';
 import styles from './page.module.css';
 
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { id: 'lectures', label: 'المحاضرات', icon: IconLectures, activeIds: ['lectures', 'singleLecture'] },
   { id: 'tasks', label: 'التاسكات', icon: IconTasks },
   { id: 'attendance', label: 'الحضور', icon: IconClipboardCheck },
+  { id: 'fillCard', label: 'الفيل كارد', icon: IconAward },
   { id: 'leaderboard', label: 'الليدربورد', icon: IconTrophy },
 ];
 
@@ -54,7 +56,7 @@ export default function StudentDashboard() {
         apiCall('/leaderboard'),
         apiCall('/tasks')
       ]);
-      updateUser({ points: meRes.points });
+      updateUser({ points: meRes.points, fill_card_count: meRes.fill_card_count });
       setLectures(lecsRes);
       setSubmissions(subsRes);
       setLeaderboard(leadRes);
@@ -98,6 +100,16 @@ export default function StudentDashboard() {
     try {
       const res = await apiCall('/submissions', 'POST', { taskId, fileUrl });
       toast.success(res.message || 'تم التسليم بنجاح');
+      const [meRes, subsRes] = await Promise.all([apiCall('/me'), apiCall('/submissions/me')]);
+      updateUser({ points: meRes.points });
+      setSubmissions(subsRes);
+    } catch (error) { toast.error(error.message); }
+  };
+
+  const handleTaskCancel = async (taskId) => {
+    try {
+      const res = await apiCall(`/submissions/${taskId}`, 'DELETE');
+      toast.success(res.message || 'تم إلغاء التسليم بنجاح');
       const [meRes, subsRes] = await Promise.all([apiCall('/me'), apiCall('/submissions/me')]);
       updateUser({ points: meRes.points });
       setSubmissions(subsRes);
@@ -197,6 +209,7 @@ export default function StudentDashboard() {
                     task={task}
                     submission={submissions.find(s => s.taskId === task.id)}
                     onSubmit={handleTaskSubmit}
+                    onCancel={handleTaskCancel}
                   />
                 ))
               )}
@@ -226,6 +239,14 @@ export default function StudentDashboard() {
               </>
             )
           )}
+        </div>
+      )}
+
+      {/* ═══ Fill Card View ═══ */}
+      {currentView === 'fillCard' && (
+        <div className={styles.view} key="fillCard">
+          <Header title="الفيل كارد" subtitle="متابعة نقاطك الخاصة" />
+          <FillCard count={user.fill_card_count || 0} />
         </div>
       )}
     </DashboardLayout>

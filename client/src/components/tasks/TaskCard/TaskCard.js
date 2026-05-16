@@ -4,9 +4,9 @@ import styles from './TaskCard.module.css';
 import Badge from '@/components/ui/Badge/Badge';
 import Button from '@/components/ui/Button/Button';
 import Input from '@/components/ui/Input/Input';
-import { IconExternalLink, IconCheck, IconUpload } from '@/components/icons';
+import { IconExternalLink, IconCheck, IconUpload, IconTrash } from '@/components/icons';
 
-export default function TaskCard({ task, submission, onSubmit }) {
+export default function TaskCard({ task, submission, onSubmit, onCancel }) {
   const isCompleted = !!submission;
   const [url, setUrl] = useState(submission?.fileUrl || '');
   const [submitting, setSubmitting] = useState(false);
@@ -28,8 +28,8 @@ export default function TaskCard({ task, submission, onSubmit }) {
           <h4 className={styles.title}>{task.title}</h4>
           {task.description && <p className={styles.desc}>{task.description}</p>}
         </div>
-        <Badge variant={isCompleted ? 'success' : 'danger'} dot>
-          {isCompleted ? 'تم التسليم' : 'لم يتم التسليم'}
+        <Badge variant={isCompleted ? (submission.grade !== null ? 'success' : 'warning') : 'danger'} dot>
+          {isCompleted ? (submission.grade !== null ? `تم التقييم: ${submission.grade} / 50` : 'تم التسليم (في انتظار التقييم)') : 'لم يتم التسليم'}
         </Badge>
       </div>
 
@@ -48,15 +48,29 @@ export default function TaskCard({ task, submission, onSubmit }) {
           onChange={(e) => setUrl(e.target.value)}
           size="md"
         />
-        <Button
-          type="submit"
-          variant={isCompleted ? 'secondary' : 'primary'}
-          size="md"
-          loading={submitting}
-          icon={isCompleted ? IconCheck : IconUpload}
-        >
-          {isCompleted ? 'تحديث التسليم' : 'تسليم المهمة'}
-        </Button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Button
+            type="submit"
+            variant={isCompleted ? 'secondary' : 'primary'}
+            size="md"
+            loading={submitting}
+            icon={isCompleted ? IconCheck : IconUpload}
+          >
+            {isCompleted ? 'تحديث التسليم' : 'تسليم المهمة'}
+          </Button>
+          {isCompleted && onCancel && (
+            <Button
+              type="button"
+              variant="danger"
+              size="md"
+              onClick={() => onCancel(task.id)}
+              disabled={submitting}
+              icon={IconTrash}
+            >
+              إلغاء التسليم
+            </Button>
+          )}
+        </div>
       </form>
     </div>
   );

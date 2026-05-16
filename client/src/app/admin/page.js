@@ -30,6 +30,7 @@ const NAV_ITEMS = [
   { id: 'attendance', label: 'الحضور', icon: IconClipboardCheck },
   { id: 'lectures', label: 'المحاضرات', icon: IconLectures },
   { id: 'tasks', label: 'التاسكات', icon: IconTasksAlt },
+  { id: 'submissions', label: 'التسليمات', icon: IconFileText },
   { id: 'tools', label: 'الأدوات', icon: IconSettings },
 ];
 
@@ -180,6 +181,15 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleUpdateFillCard = async (studentId, action) => {
+    try {
+      await apiCall(`/admin/students/${studentId}/fill-card`, 'PUT', { action });
+      fetchData();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
   const handleDeleteStudent = (id, name) => {
     setConfirmState({
       open: true,
@@ -191,6 +201,17 @@ export default function AdminDashboard() {
         setConfirmState(s => ({ ...s, open: false }));
       }
     });
+  };
+
+  // ——— Submissions handler ———
+  const handleGradeSubmission = async (subId, grade) => {
+    try {
+      await apiCall(`/admin/submissions/${subId}/grade`, 'PUT', { grade });
+      toast.success('تم تقييم التسليم بنجاح');
+      fetchData();
+    } catch (err) {
+      toast.error(err.message);
+    }
   };
 
   if (!ready || !user) return null;
@@ -279,13 +300,14 @@ export default function AdminDashboard() {
                     <th>الدور</th>
                     <th>التسليمات</th>
                     <th>التقييم</th>
+                    <th>الفيل كارد</th>
                     {isAdmin && <th>إجراءات</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredStudents.length === 0 ? (
                     <tr>
-                      <td colSpan={isAdmin ? 6 : 5} className={styles.emptyCell}>
+                      <td colSpan={isAdmin ? 7 : 6} className={styles.emptyCell}>
                         <EmptyState icon={IconStudents} title="لا يوجد طلاب" description={students.length === 0 ? "قم بإضافة أول طالب للمنصة." : "لا توجد نتائج مطابقة لبحثك."} />
                       </td>
                     </tr>
@@ -306,6 +328,13 @@ export default function AdminDashboard() {
                           <td><Badge variant="info">طالب</Badge></td>
                           <td>{s.submissionsCount} / {totalLectures}</td>
                           <td><Badge variant={variant}>{score} نقطة</Badge></td>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <button onClick={() => handleUpdateFillCard(s.id, 'decrement')} disabled={s.fill_card_count <= 0} style={{ padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--card-bg)' }}>-</button>
+                              <span style={{ minWidth: '20px', textAlign: 'center' }}>{s.fill_card_count || 0}</span>
+                              <button onClick={() => handleUpdateFillCard(s.id, 'increment')} disabled={s.fill_card_count >= 12} style={{ padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--card-bg)' }}>+</button>
+                            </div>
+                          </td>
                           {isAdmin && (
                             <td className={styles.actionsCell}>
                               <Button variant="secondary" size="sm" icon={IconEdit} onClick={() => openEditStudent(s)}>تعديل</Button>
@@ -420,6 +449,52 @@ export default function AdminDashboard() {
       {currentView === 'attendance' && (
         <div className={styles.view} key="attendance">
           <AttendancePanel />
+        </div>
+      )}
+
+      {/* ═══ Submissions View ═══ */}
+      {currentView === 'submissions' && (
+        <div className={styles.view} key="submissions">
+          <Header title="إدارة التسليمات" subtitle={`${submissions.length} تسليم`} />
+          
+          {loading ? <SkeletonList count={3} /> : (
+            <div className={styles.listGap}>
+              {submissions.length === 0 ? (
+                <EmptyState icon={IconFileText} title="لا توجد تسليمات" description="لم يقم أي طالب بالتسليم بعد." />
+              ) : (
+                submissions.map(sub => (
+                  <Card key={sub.id} padding="sm" className={styles.adminListItem}>
+                    <div className={styles.adminItemInfo}>
+                      <h4>{sub.studentName}</h4>
+                      <p>{sub.taskTitle}</p>
+                      <a href={sub.fileUrl?.startsWith('http') ? sub.fileUrl : '#'} target="_blank" rel="noopener noreferrer" className={styles.taskLink}>
+                        <IconExternalLink size={13} /> عرض الملف المرفق
+                      </a>
+                    </div>
+                    <div className={styles.adminItemActions} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <Input
+                        type="number"
+                        placeholder="الدرجة من 50"
+                        min="0"
+                        max="50"
+                        defaultValue={sub.grade ?? ''}
+                        onBlur={(e) => {
+                          const val = parseInt(e.target.value);
+                          if (!isNaN(val) && val !== sub.grade) {
+                            handleGradeSubmission(sub.id, val);
+                          }
+                        }}
+                        style={{ width: '120px' }}
+                      />
+                      <Badge variant={sub.grade !== null ? 'success' : 'warning'}>
+                        {sub.grade !== null ? `تم التقييم: ${sub.grade}/50` : 'بانتظار التقييم'}
+                      </Badge>
+                    </div>
+                  </Card>
+                ))
+              )}
+            </div>
+          )}
         </div>
       )}
 
