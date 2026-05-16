@@ -14,8 +14,7 @@ export default function FillCard({ count = 0 }) {
           {/* Header Section */}
           <div className={styles.header}>
             <div className={styles.logoLeft}>
-              <span className={styles.mental}>mental</span>
-              <span className={styles.vision}>Vision</span>
+              <Image src="/ghaith-logo.svg" alt="Ghaith Logo" width={80} height={60} className={styles.ghaithImage} />
             </div>
             
             <div className={styles.titleBox}>
@@ -23,7 +22,7 @@ export default function FillCard({ count = 0 }) {
             </div>
             
             <div className={styles.logoRight}>
-              <Image src="/ghaith-logo.svg" alt="Ghaith Logo" width={60} height={50} className={styles.ghaithImage} />
+              <Image src="/logo.svg" alt="Mental Vision Logo" width={100} height={50} className={styles.mentalImage} />
             </div>
           </div>
 

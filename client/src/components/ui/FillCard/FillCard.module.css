@@ -32,20 +32,8 @@
 
 .logoLeft {
   display: flex;
-  flex-direction: column;
-  color: #fff;
-  font-family: 'Brush Script MT', cursive, sans-serif;
-  line-height: 1;
-}
-
-.mental {
-  font-size: 1.5rem;
-  margin-bottom: -5px;
-}
-
-.vision {
-  font-size: 2.2rem;
-  font-weight: bold;
+  justify-content: center;
+  align-items: center;
 }
 
 .titleBox {
@@ -87,10 +75,9 @@
 }
 
 .logoRight {
-  border: 1px solid #6c9a75;
-  padding: 5px;
   display: flex;
   align-items: center;
+  justify-content: center;
 }
 
 /* Grid for 12 circles */
