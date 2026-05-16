@@ -23,10 +23,7 @@ export default function FillCard({ count = 0 }) {
             </div>
             
             <div className={styles.logoRight}>
-              <div className={styles.ghaithLogo}>
-                <span className={styles.ghaithAr}>غيث للتنمية<br/>المجتمعية</span>
-                <span className={styles.ghaithEn}>Ghaith For Community<br/>Development</span>
-              </div>
+              <Image src="/ghaith-logo.svg" alt="Ghaith Logo" width={60} height={50} className={styles.ghaithImage} />
             </div>
           </div>
 

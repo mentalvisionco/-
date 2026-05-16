@@ -93,25 +93,6 @@
   align-items: center;
 }
 
-.ghaithLogo {
-  color: #6c9a75;
-  text-align: right;
-  font-size: 0.7rem;
-  display: flex;
-  flex-direction: column;
-  padding-left: 10px;
-  border-left: 1px solid #6c9a75;
-}
-
-.ghaithAr {
-  font-weight: bold;
-  margin-bottom: 5px;
-}
-
-.ghaithEn {
-  font-size: 0.6rem;
-}
-
 /* Grid for 12 circles */
 .grid {
   display: grid;
