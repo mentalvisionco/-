@@ -95,6 +95,14 @@ async function setupDB() {
     );
   `);
 
+  // Migrate existing database to add notes if it doesn't exist
+  try {
+    db.exec('ALTER TABLE attendance_records ADD COLUMN notes TEXT');
+    console.log('✅ Added notes column to attendance_records');
+  } catch (err) {
+    // Column already exists or table doesn't exist yet
+  }
+
   // Migrate existing database to add latePoints if it doesn't exist
   try {
     db.exec('ALTER TABLE attendance_sessions ADD COLUMN latePoints INTEGER DEFAULT 5');

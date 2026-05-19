@@ -25,8 +25,9 @@ export default function AttendanceMarking({ sessionId, onBack }) {
 
   // Local attendance state: { [studentId]: status }
   const [attendance, setAttendance] = useState({});
-  // Track original state for dirty detection
   const [originalAttendance, setOriginalAttendance] = useState({});
+  const [notes, setNotes] = useState({});
+  const [originalNotes, setOriginalNotes] = useState({});
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
@@ -37,11 +38,15 @@ export default function AttendanceMarking({ sessionId, onBack }) {
 
       // Build attendance map from existing records
       const map = {};
+      const notesMap = {};
       for (const s of data.students) {
         map[s.id] = s.status || 'absent';
+        notesMap[s.id] = s.notes || '';
       }
       setAttendance(map);
       setOriginalAttendance({ ...map });
+      setNotes(notesMap);
+      setOriginalNotes({ ...notesMap });
     } catch (err) {
       toast.error('خطأ في جلب بيانات الجلسة');
     } finally {
@@ -56,6 +61,12 @@ export default function AttendanceMarking({ sessionId, onBack }) {
     if (session?.isLocked && !isAdmin) return;
     if (session?.isLocked) return;
     setAttendance(prev => ({ ...prev, [studentId]: status }));
+  };
+
+  const setStudentNote = (studentId, text) => {
+    if (session?.isLocked && !isAdmin) return;
+    if (session?.isLocked) return;
+    setNotes(prev => ({ ...prev, [studentId]: text }));
   };
 
   const markAllPresent = () => {
@@ -78,11 +89,13 @@ export default function AttendanceMarking({ sessionId, onBack }) {
     try {
       const records = Object.entries(attendance).map(([studentId, status]) => ({
         studentId: parseInt(studentId),
-        status
+        status,
+        notes: notes[studentId] || ''
       }));
       await apiCall(`/admin/attendance/sessions/${sessionId}/records`, 'POST', { records });
       toast.success('تم حفظ الحضور بنجاح');
       setOriginalAttendance({ ...attendance });
+      setOriginalNotes({ ...notes });
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -109,8 +122,8 @@ export default function AttendanceMarking({ sessionId, onBack }) {
   }, [attendance]);
 
   const isDirty = useMemo(() => {
-    return JSON.stringify(attendance) !== JSON.stringify(originalAttendance);
-  }, [attendance, originalAttendance]);
+    return JSON.stringify(attendance) !== JSON.stringify(originalAttendance) || JSON.stringify(notes) !== JSON.stringify(originalNotes);
+  }, [attendance, originalAttendance, notes, originalNotes]);
 
   if (loading) {
     return (
@@ -188,50 +201,66 @@ export default function AttendanceMarking({ sessionId, onBack }) {
       <div className={styles.studentList}>
         {filteredStudents.map((student, idx) => {
           const status = attendance[student.id] || 'absent';
+          const studentNote = notes[student.id] || '';
           const initials = student.name ? student.name.substring(0, 2) : 'ط';
           return (
-            <div
-              key={student.id}
-              className={`${styles.studentRow} ${status === 'present' ? styles.statusPresent : status === 'late' ? styles.statusLate : styles.statusAbsent}`}
-              style={{ animationDelay: `${Math.min(idx * 30, 300)}ms` }}
-            >
-              <div className={styles.studentInfo}>
-                <div className={styles.avatar}>{initials}</div>
-                <div>
-                  <div className={styles.studentName}>{student.name}</div>
-                  <div className={styles.studentEmail} dir="ltr">{student.username}</div>
+            <div key={student.id} style={{ display: 'flex', flexDirection: 'column' }}>
+              <div
+                className={`${styles.studentRow} ${status === 'present' ? styles.statusPresent : status === 'late' ? styles.statusLate : styles.statusAbsent}`}
+                style={{ animationDelay: `${Math.min(idx * 30, 300)}ms` }}
+              >
+                <div className={styles.studentInfo}>
+                  <div className={styles.avatar}>{initials}</div>
+                  <div>
+                    <div className={styles.studentName}>{student.name}</div>
+                    <div className={styles.studentEmail} dir="ltr">{student.username}</div>
+                  </div>
+                </div>
+
+                <div className={styles.statusToggle}>
+                  <button
+                    type="button"
+                    className={`${styles.toggleBtn} ${status === 'present' ? styles.activePresent : ''}`}
+                    onClick={() => setStatus(student.id, 'present')}
+                    disabled={session.isLocked}
+                    aria-label="حاضر"
+                  >
+                    <IconCheckCircle size={15} /> حاضر
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.toggleBtn} ${status === 'late' ? styles.activeLate : ''}`}
+                    onClick={() => setStatus(student.id, 'late')}
+                    disabled={session.isLocked}
+                    aria-label="متأخر"
+                  >
+                    <IconClock size={15} /> متأخر
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.toggleBtn} ${status === 'absent' ? styles.activeAbsent : ''}`}
+                    onClick={() => setStatus(student.id, 'absent')}
+                    disabled={session.isLocked}
+                    aria-label="غائب"
+                  >
+                    <IconXCircle size={15} /> غائب
+                  </button>
                 </div>
               </div>
-
-              <div className={styles.statusToggle}>
-                <button
-                  type="button"
-                  className={`${styles.toggleBtn} ${status === 'present' ? styles.activePresent : ''}`}
-                  onClick={() => setStatus(student.id, 'present')}
-                  disabled={session.isLocked}
-                  aria-label="حاضر"
-                >
-                  <IconCheckCircle size={15} /> حاضر
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.toggleBtn} ${status === 'late' ? styles.activeLate : ''}`}
-                  onClick={() => setStatus(student.id, 'late')}
-                  disabled={session.isLocked}
-                  aria-label="متأخر"
-                >
-                  <IconClock size={15} /> متأخر
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.toggleBtn} ${status === 'absent' ? styles.activeAbsent : ''}`}
-                  onClick={() => setStatus(student.id, 'absent')}
-                  disabled={session.isLocked}
-                  aria-label="غائب"
-                >
-                  <IconXCircle size={15} /> غائب
-                </button>
-              </div>
+              
+              {status === 'absent' && (
+                <div style={{ padding: '0 12px 12px', background: 'var(--card-bg)', borderBottom: '1px solid var(--border-color)', borderLeft: '1px solid var(--border-color)', borderRight: '1px solid var(--border-color)', borderBottomLeftRadius: 'var(--radius-md)', borderBottomRightRadius: 'var(--radius-md)', marginTop: '-12px', marginBottom: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>ملاحظة الغياب:</span>
+                  <input
+                    type="text"
+                    value={studentNote}
+                    onChange={(e) => setStudentNote(student.id, e.target.value)}
+                    placeholder="سبب الغياب (اختياري)..."
+                    disabled={session.isLocked}
+                    style={{ flex: 1, padding: '6px 12px', fontSize: '13px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+              )}
             </div>
           );
         })}

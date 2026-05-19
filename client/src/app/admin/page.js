@@ -313,7 +313,7 @@ export default function AdminDashboard() {
                     </tr>
                   ) : (
                     filteredStudents.map(s => {
-                      const score = (s.submissionsCount * 10) + (s.points || 0);
+                      const score = s.points || 0;
                       const variant = score >= 100 ? 'success' : score >= 50 ? 'warning' : 'danger';
                       const initials = s.name ? s.name.substring(0, 2) : 'ط';
                       return (

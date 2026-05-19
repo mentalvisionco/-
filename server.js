@@ -816,7 +816,7 @@ app.get('/api/admin/attendance/sessions/:id/records', authenticateToken, (req, r
     // Get all students with their attendance status for this session
     const students = dbAll(`
       SELECT u.id, u.name, u.username, u.points,
-             ar.status, ar.awardedPoints, ar.id as recordId
+             ar.status, ar.awardedPoints, ar.notes, ar.id as recordId
       FROM users u
       LEFT JOIN attendance_records ar ON u.id = ar.studentId AND ar.sessionId = ?
       WHERE u.role = 'student'
@@ -851,6 +851,7 @@ app.post('/api/admin/attendance/sessions/:id/records', authenticateToken, (req, 
     for (const rec of records) {
       const studentId = parseInt(rec.studentId);
       const status = rec.status;
+      const notes = sanitize(rec.notes || '');
 
       if (!studentId || !validStatuses.includes(status)) continue;
 
@@ -878,14 +879,16 @@ app.post('/api/admin/attendance/sessions/:id/records', authenticateToken, (req, 
             pointsChanged += newAward;
           }
 
-          dbRun('UPDATE attendance_records SET status = ?, awardedPoints = ? WHERE id = ?', [status, newAward, existing.id]);
+          dbRun('UPDATE attendance_records SET status = ?, awardedPoints = ?, notes = ? WHERE id = ?', [status, newAward, notes, existing.id]);
+        } else if (existing.notes !== notes) {
+          dbRun('UPDATE attendance_records SET notes = ? WHERE id = ?', [notes, existing.id]);
         }
       } else {
         // New record
         const award = status === 'present' ? session.bonusPoints : (status === 'late' ? session.latePoints : 0);
         dbRun(
-          'INSERT INTO attendance_records (sessionId, studentId, status, awardedPoints) VALUES (?, ?, ?, ?)',
-          [req.params.id, studentId, status, award]
+          'INSERT INTO attendance_records (sessionId, studentId, status, awardedPoints, notes) VALUES (?, ?, ?, ?, ?)',
+          [req.params.id, studentId, status, award, notes]
         );
         if (award > 0) {
           dbRun('UPDATE users SET points = points + ? WHERE id = ?', [award, studentId]);
