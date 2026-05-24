@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "C:\\Users\\Abdo\\Downloads\\mv\\MVC\\logs\\.3079f41903eb29c794dbf1087061aafec53c7c4e-audit.json",
+    "files": [
+        {
+            "date": 1779659389794,
+            "name": "C:\\Users\\Abdo\\Downloads\\mv\\MVC\\logs\\combined-2026-05-25.log",
+            "hash": "c2834109994fd22c276d61c1c046c8d4a8e9f2235d5a083b26647a108fb226eb"
+        }
+    ],
+    "hashType": "sha256"
+}

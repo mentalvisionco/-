@@ -258,10 +258,24 @@ export default function AdminDashboard() {
                       <div className={styles.subInfo}>
                         <strong>{sub.studentName}</strong>
                         <span className={styles.subTask}>{sub.taskTitle}</span>
+                        {sub.uploadedFileName && (
+                          <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', display: 'block', marginTop: '2px' }}>
+                            الملف: {sub.uploadedFileName}
+                          </span>
+                        )}
                       </div>
-                      <a href={sub.fileUrl?.startsWith('http') ? sub.fileUrl : '#'} target="_blank" rel="noopener noreferrer" className={styles.subLink}>
-                        <IconExternalLink size={14} /> عرض
-                      </a>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        {sub.fileUrl && sub.fileUrl.startsWith('http') && (
+                          <a href={sub.fileUrl} target="_blank" rel="noopener noreferrer" className={styles.subLink} title="عرض الرابط الخارجي">
+                            <IconExternalLink size={14} /> رابط
+                          </a>
+                        )}
+                        {sub.uploadedFileUrl && (
+                          <a href={sub.uploadedFileUrl} target="_blank" rel="noopener noreferrer" className={styles.subLink} style={{ background: 'var(--green)', color: 'white' }} title="عرض الملف المرفوع">
+                            <IconExternalLink size={14} /> ملف
+                          </a>
+                        )}
+                      </div>
                     </Card>
                   ))
                 )}
@@ -467,9 +481,18 @@ export default function AdminDashboard() {
                     <div className={styles.adminItemInfo}>
                       <h4>{sub.studentName}</h4>
                       <p>{sub.taskTitle}</p>
-                      <a href={sub.fileUrl?.startsWith('http') ? sub.fileUrl : '#'} target="_blank" rel="noopener noreferrer" className={styles.taskLink}>
-                        <IconExternalLink size={13} /> عرض الملف المرفق
-                      </a>
+                      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '8px' }}>
+                        {sub.fileUrl && sub.fileUrl.startsWith('http') && (
+                          <a href={sub.fileUrl} target="_blank" rel="noopener noreferrer" className={styles.taskLink}>
+                            <IconExternalLink size={13} /> عرض الرابط الخارجي
+                          </a>
+                        )}
+                        {sub.uploadedFileUrl && (
+                          <a href={sub.uploadedFileUrl} target="_blank" rel="noopener noreferrer" className={styles.taskLink} style={{ color: 'var(--green)' }}>
+                            <IconExternalLink size={13} /> عرض الملف المرفوع ({sub.uploadedFileName || 'ملف'})
+                          </a>
+                        )}
+                      </div>
                     </div>
                     <div className={styles.adminItemActions} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <Input

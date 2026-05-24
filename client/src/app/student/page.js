@@ -96,14 +96,22 @@ export default function StudentDashboard() {
     } catch (err) { toast.error(err.message); }
   };
 
-  const handleTaskSubmit = async (taskId, fileUrl) => {
+  const handleTaskSubmit = async (taskId, fileUrl, file, onProgress) => {
     try {
-      const res = await apiCall('/submissions', 'POST', { taskId, fileUrl });
+      const formData = new FormData();
+      formData.append('taskId', taskId);
+      if (fileUrl) formData.append('fileUrl', fileUrl);
+      if (file) formData.append('file', file);
+
+      const res = await apiCall('/submissions', 'POST', formData, onProgress);
       toast.success(res.message || 'تم التسليم بنجاح');
       const [meRes, subsRes] = await Promise.all([apiCall('/me'), apiCall('/submissions/me')]);
       updateUser({ points: meRes.points });
       setSubmissions(subsRes);
-    } catch (error) { toast.error(error.message); }
+    } catch (error) {
+      toast.error(error.message);
+      throw error;
+    }
   };
 
   const handleTaskCancel = async (taskId) => {

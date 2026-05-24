@@ -4,7 +4,137 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
-const { setupDB, dbGet, dbAll, dbRun } = require('./database');
+const crypto = require('crypto');
+const cookieParser = require('cookie-parser');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const logger = require('./services/logger');
+
+// Load .env file manually if it exists to support local development environments without external dotenv package
+const envPath = path.join(__dirname, '.env');
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, 'utf-8');
+  envContent.split(/\r?\n/).forEach(line => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) return;
+    const parts = trimmed.split('=');
+    if (parts.length >= 2) {
+      const key = parts[0].trim();
+      const val = parts.slice(1).join('=').trim().replace(/^['"]|['"]$/g, '');
+      if (key && process.env[key] === undefined) {
+        process.env[key] = val;
+      }
+    }
+  });
+}
+
+// Startup Environment Validation
+function validateEnv() {
+  const missing = [];
+  if (process.env.NODE_ENV === 'production' && !process.env.SECRET_KEY) {
+    missing.push('SECRET_KEY');
+  }
+  if (!process.env.GOOGLE_DRIVE_FOLDER_ID) {
+    missing.push('GOOGLE_DRIVE_FOLDER_ID');
+  }
+  
+  // Validate Google Drive OAuth2 parameters
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.GOOGLE_CLIENT_ID) {
+      missing.push('GOOGLE_CLIENT_ID');
+    }
+    if (!process.env.GOOGLE_CLIENT_SECRET) {
+      missing.push('GOOGLE_CLIENT_SECRET');
+    }
+    if (!process.env.GOOGLE_REFRESH_TOKEN) {
+      missing.push('GOOGLE_REFRESH_TOKEN');
+    }
+  } else {
+    // In development, warn if OAuth2 credentials are missing but do not crash
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_REFRESH_TOKEN) {
+      logger.warn('⚠️ Warning: Google Drive OAuth2 environment configuration is incomplete (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN). File uploads will fail.');
+    }
+  }
+  
+  if (missing.length > 0) {
+    logger.error('❌ FATAL STARTUP ERROR: Missing required environment configuration:');
+    missing.forEach(m => logger.error(`   - ${m}`));
+    process.exit(1);
+  }
+}
+validateEnv();
+
+const { setupDB, dbGet, dbAll, dbRun, logAudit, dbBackup } = require('./database');
+const multer = require('multer');
+const { uploadFile, deleteFile } = require('./services/storage');
+
+// ==============================
+// Multer Configuration
+// ==============================
+const storage = multer.memoryStorage();
+
+const ALLOWED_EXTENSIONS = [
+  '.pdf', '.doc', '.docx', '.png', '.jpg', '.jpeg', '.zip',
+  '.psd', '.psb', '.ai', '.eps'
+];
+const ALLOWED_MIME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'application/zip',
+  'application/x-zip-compressed',
+  // Photoshop MIME types
+  'image/vnd.adobe.photoshop',
+  'image/psd',
+  'application/x-photoshop',
+  'application/photoshop',
+  'application/psd',
+  // Illustrator/EPS MIME types
+  'application/vnd.adobe.illustrator',
+  'application/postscript',
+  'image/x-eps',
+  'application/eps',
+  'application/x-eps'
+];
+const REJECTED_EXTENSIONS = ['.exe', '.bat', '.sh', '.js'];
+const REJECTED_MIME_TYPES = [
+  'application/x-msdownload',
+  'application/x-sh',
+  'application/x-bash',
+  'application/javascript',
+  'text/javascript'
+];
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 500 * 1024 * 1024, // 500MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const mimeType = file.mimetype.toLowerCase();
+
+    // Check if extension or mimeType is rejected
+    if (REJECTED_EXTENSIONS.includes(ext) || REJECTED_MIME_TYPES.includes(mimeType)) {
+      return cb(new Error('الملفات من هذا النوع غير مسموح بها (exe, bat, sh, js)'));
+    }
+
+    // Check if extension and mimeType are allowed
+    const isExtAllowed = ALLOWED_EXTENSIONS.includes(ext);
+    const isMimeAllowed = ALLOWED_MIME_TYPES.includes(mimeType);
+
+    if (!isExtAllowed || !isMimeAllowed) {
+      return cb(new Error('نوع الملف غير مدعوم. الأنواع المسموح بها هي: pdf, doc, docx, png, jpg, jpeg, zip, psd, psb, ai, eps'));
+    }
+
+    cb(null, true);
+  }
+});
+
+const uploadSingle = upload.single('file');
 
 // ==============================
 // إعداد التطبيق
@@ -12,25 +142,58 @@ const { setupDB, dbGet, dbAll, dbRun } = require('./database');
 const app = express();
 const PORT = process.env.PORT || 5000;
 const SECRET_KEY = process.env.SECRET_KEY;
+let ACTIVE_SECRET_KEY = SECRET_KEY;
 if (!SECRET_KEY) {
   if (process.env.NODE_ENV === 'production') {
-    console.error('FATAL ERROR: SECRET_KEY is not defined in production environment.');
+    logger.error('FATAL ERROR: SECRET_KEY is not defined in production environment.');
     process.exit(1);
   } else {
-    console.warn('WARNING: SECRET_KEY is not defined. Using an insecure fallback for development only.');
+    // Generate a secure random string dynamically in development to prevent insecure static defaults
+    const fallbackSecret = crypto.randomBytes(32).toString('hex');
+    logger.warn('WARNING: SECRET_KEY is not defined in .env. Generated a secure, dynamic fallback key for development.');
+    ACTIVE_SECRET_KEY = fallbackSecret;
   }
 }
-const ACTIVE_SECRET_KEY = SECRET_KEY || 'lms_super_secret_key_123';
 
-// Middleware
-app.use(cors());
+// Security Middlewares & CORS
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https://*", "blob:"],
+      mediaSrc: ["'self'", "https://*", "blob:"],
+      connectSrc: ["'self'", "https://*", "http://localhost:*"]
+    }
+  },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  : [];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin) || (process.env.NODE_ENV !== 'production' && origin.startsWith('http://localhost:'))) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
+app.use(cookieParser());
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'client', 'out'), { extensions: ['html'] }));
 
 // ==============================
 // Rate Limiting
 // ==============================
-const rateLimit = require('express-rate-limit');
 app.set('trust proxy', 1);
 
 const apiLimiter = rateLimit({
@@ -39,7 +202,20 @@ const apiLimiter = rateLimit({
   message: { error: 'طلبات كثيرة جداً، حاول بعد قليل' }
 });
 
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 15, // limit each IP to 15 upload requests per windowMs
+  message: { error: 'لقد تجاوزت حد الرفع المسموح به. يرجى المحاولة بعد 15 دقيقة.' }
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // limit login attempts to 5 per 15 minutes
+  message: { error: 'محاولات دخول كثيرة جداً، يرجى المحاولة بعد 15 دقيقة' }
+});
+
 app.use('/api', apiLimiter);
+app.use('/api/login', loginLimiter);
 
 // ==============================
 // Health Check (مطلوب لـ Railway)
@@ -57,6 +233,8 @@ app.get('/health', (req, res) => {
 // ==============================
 // Auth Middleware
 // ==============================
+// Auth Middleware
+// ==============================
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -70,9 +248,24 @@ function authenticateToken(req, res, next) {
     req.user = user;
     next();
   } catch (err) {
-    return res.status(403).json({ error: 'انتهت صلاحية الجلسة - يرجى إعادة تسجيل الدخول' });
+    // Return 401 to trigger token refresh queue on the client
+    return res.status(401).json({ error: 'انتهت صلاحية الجلسة - يرجى إعادة تسجيل الدخول' });
   }
 }
+
+// Authorization Middlewares
+function requireRole(...allowedRoles) {
+  return (req, res, next) => {
+    if (!req.user || !allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'غير مصرح لك - لا تملك الصلاحيات الكافية' });
+    }
+    next();
+  };
+}
+
+const requireAdmin = requireRole('admin');
+const requireStudent = requireRole('student');
+const requireViewerOrAdmin = requireRole('admin', 'viewer');
 
 // ==============================
 // Input Validation Helpers
@@ -90,6 +283,9 @@ function sanitize(str) {
 // مسارات المصادقة (Auth)
 // =======================
 
+function generateRefreshToken() {
+  return crypto.randomBytes(40).toString('hex');
+}
 
 app.post('/api/login', (req, res) => {
   try {
@@ -97,27 +293,149 @@ app.post('/api/login', (req, res) => {
     const password = req.body.password;
 
     if (!username || !password) {
+      logAudit(null, 'login_failed', { error: 'Username or password missing' }, req);
       return res.status(400).json({ error: 'اسم المستخدم وكلمة المرور مطلوبان' });
     }
 
     const user = dbGet('SELECT * FROM users WHERE username = ?', [username]);
     if (!user) {
+      logAudit(null, 'login_failed', { username, error: 'User not found' }, req);
       return res.status(400).json({ error: 'بيانات الدخول غير صحيحة' });
     }
 
     const validPassword = bcrypt.compareSync(password, user.password);
     if (!validPassword) {
+      logAudit(null, 'login_failed', { username, error: 'Invalid password' }, req);
       return res.status(400).json({ error: 'بيانات الدخول غير صحيحة' });
     }
 
     const tokenPayload = { id: user.id, name: user.name, username: user.username, role: user.role };
-    const token = jwt.sign(tokenPayload, ACTIVE_SECRET_KEY, { expiresIn: '24h' });
+    // Access token valid for 15 minutes
+    const accessToken = jwt.sign(tokenPayload, ACTIVE_SECRET_KEY, { expiresIn: '15m' });
+    
+    // Refresh token valid for 7 days
+    const refreshToken = generateRefreshToken();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    res.json({ user: { ...tokenPayload, points: user.points }, token });
+    const userAgent = req.headers['user-agent'] || null;
+    const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+    dbRun(
+      'INSERT INTO sessions (token, userId, userAgent, ipAddress, expiresAt) VALUES (?, ?, ?, ?, ?)',
+      [refreshToken, user.id, userAgent, ipAddress, expiresAt]
+    );
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+
+    logAudit(user.id, 'login_success', { username: user.username }, req);
+
+    res.json({ user: { ...tokenPayload, points: user.points }, token: accessToken });
   } catch (error) {
-    console.error('Login error:', error.message);
+    logger.error('Login error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ في الخادم' });
   }
+});
+
+app.post('/api/auth/refresh', (req, res) => {
+  // CSRF Guard: Custom header check
+  const csrfHeader = req.headers['x-requested-with'];
+  if (csrfHeader !== 'XMLHttpRequest') {
+    logger.warn('CSRF Guard: Missing custom header on token refresh request.');
+    return res.status(400).json({ error: 'طلب غير صالح (CSRF Guard)' });
+  }
+
+  // CSRF Guard: Origin check
+  const origin = req.headers['origin'] || req.headers['referer'];
+  if (origin) {
+    try {
+      const originUrl = new URL(origin, 'http://localhost');
+      const isAllowed = allowedOrigins.includes(originUrl.origin) || 
+                        (process.env.NODE_ENV !== 'production' && originUrl.origin.includes('localhost'));
+      if (!isAllowed && originUrl.origin !== `${req.protocol}://${req.get('host')}`) {
+        logger.warn(`CSRF Guard: Blocked origin ${originUrl.origin} on token refresh request.`);
+        return res.status(400).json({ error: 'طلب غير صالح (CORS/CSRF)' });
+      }
+    } catch (e) {
+      return res.status(400).json({ error: 'طلب غير صالح (CORS/CSRF parsing)' });
+    }
+  }
+
+  const oldRefreshToken = req.cookies.refreshToken;
+  if (!oldRefreshToken) {
+    return res.status(401).json({ error: 'انتهت صلاحية الجلسة' });
+  }
+
+  try {
+    const session = dbGet('SELECT * FROM sessions WHERE token = ?', [oldRefreshToken]);
+    if (!session) {
+      logger.warn('Replay attack warning or session already revoked.');
+      res.clearCookie('refreshToken');
+      return res.status(401).json({ error: 'جلسة غير صالحة' });
+    }
+
+    if (new Date(session.expiresAt) < new Date()) {
+      dbRun('DELETE FROM sessions WHERE token = ?', [oldRefreshToken]);
+      res.clearCookie('refreshToken');
+      return res.status(401).json({ error: 'انتهت صلاحية الجلسة' });
+    }
+
+    const user = dbGet('SELECT * FROM users WHERE id = ?', [session.userId]);
+    if (!user) {
+      dbRun('DELETE FROM sessions WHERE token = ?', [oldRefreshToken]);
+      res.clearCookie('refreshToken');
+      return res.status(401).json({ error: 'مستخدم غير موجود' });
+    }
+
+    const tokenPayload = { id: user.id, name: user.name, username: user.username, role: user.role };
+    const newAccessToken = jwt.sign(tokenPayload, ACTIVE_SECRET_KEY, { expiresIn: '15m' });
+
+    // Refresh Token Rotation (RTR)
+    const newRefreshToken = generateRefreshToken();
+    const newExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    dbRun('DELETE FROM sessions WHERE token = ?', [oldRefreshToken]);
+
+    const userAgent = req.headers['user-agent'] || null;
+    const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+    dbRun(
+      'INSERT INTO sessions (token, userId, userAgent, ipAddress, expiresAt) VALUES (?, ?, ?, ?, ?)',
+      [newRefreshToken, user.id, userAgent, ipAddress, newExpiresAt]
+    );
+
+    res.cookie('refreshToken', newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
+    res.json({ accessToken: newAccessToken });
+  } catch (error) {
+    logger.error('Token refresh error: %s', error.stack);
+    res.status(500).json({ error: 'حدث خطأ في الخادم' });
+  }
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  const oldRefreshToken = req.cookies.refreshToken;
+  if (oldRefreshToken) {
+    try {
+      const session = dbGet('SELECT userId FROM sessions WHERE token = ?', [oldRefreshToken]);
+      if (session) {
+        logAudit(session.userId, 'logout', null, req);
+      }
+      dbRun('DELETE FROM sessions WHERE token = ?', [oldRefreshToken]);
+    } catch (err) {
+      logger.error('Logout error: %s', err.stack);
+    }
+  }
+  res.clearCookie('refreshToken');
+  res.json({ message: 'تم تسجيل الخروج بنجاح' });
 });
 
 app.get('/api/me', authenticateToken, (req, res) => {
@@ -150,14 +468,17 @@ app.put('/api/me/password', authenticateToken, (req, res) => {
 
     const validPassword = bcrypt.compareSync(currentPassword, user.password);
     if (!validPassword) {
+      logAudit(req.user.id, 'password_change_failed', { error: 'Invalid current password' }, req);
       return res.status(400).json({ error: 'كلمة المرور الحالية غير صحيحة' });
     }
 
     const hashedPassword = bcrypt.hashSync(newPassword, 10);
     dbRun('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, req.user.id]);
+    
+    logAudit(req.user.id, 'password_change_success', null, req);
     res.json({ message: 'تم تغيير كلمة المرور بنجاح' });
   } catch (error) {
-    console.error('Password change error:', error.message);
+    logger.error('Password change error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ في الخادم' });
   }
 });
@@ -176,7 +497,7 @@ app.get('/api/lectures', authenticateToken, (req, res) => {
     `);
     res.json(lectures);
   } catch (error) {
-    console.error('Lectures error:', error.message);
+    logger.error('Lectures error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ في جلب المحاضرات' });
   }
 });
@@ -184,51 +505,102 @@ app.get('/api/lectures', authenticateToken, (req, res) => {
 // =======================
 // مسارات التسليمات (Submissions)
 // =======================
-app.post('/api/submissions', authenticateToken, (req, res) => {
-  if (req.user.role !== 'student') {
-    return res.status(403).json({ error: 'غير مصرح - للطلاب فقط' });
-  }
-
-  try {
-    const taskId = parseInt(req.body.taskId);
-    const fileUrl = sanitize(req.body.fileUrl);
-
-    if (!taskId || isNaN(taskId)) {
-      return res.status(400).json({ error: 'معرف المهمة مطلوب' });
-    }
-    if (!fileUrl) {
-      return res.status(400).json({ error: 'رابط الملف مطلوب' });
-    }
-    if (!fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
-      return res.status(400).json({ error: 'رابط الملف غير صالح' });
+app.post('/api/submissions', authenticateToken, requireStudent, uploadLimiter, (req, res) => {
+  uploadSingle(req, res, async function (err) {
+    if (err) {
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ error: 'حجم الملف كبير جداً. الحد الأقصى هو 500 ميجابايت' });
+        }
+        return res.status(400).json({ error: `خطأ في تحميل الملف: ${err.message}` });
+      }
+      return res.status(400).json({ error: err.message });
     }
 
-    // التحقق من وجود المهمة
-    const task = dbGet('SELECT id FROM tasks WHERE id = ?', [taskId]);
-    if (!task) {
-      return res.status(404).json({ error: 'المهمة غير موجودة' });
-    }
+    try {
+      const taskId = parseInt(req.body.taskId);
+      let fileUrl = sanitize(req.body.fileUrl);
 
-    const existing = dbGet(
-      'SELECT id FROM submissions WHERE userId = ? AND taskId = ?',
-      [req.user.id, taskId]
-    );
+      if (!taskId || isNaN(taskId)) {
+        return res.status(400).json({ error: 'معرف المهمة مطلوب' });
+      }
 
-    if (existing) {
-      dbRun('UPDATE submissions SET fileUrl = ? WHERE id = ?', [fileUrl, existing.id]);
-      res.json({ message: 'تم تحديث التسليم بنجاح' });
-    } else {
-      dbRun(
-        'INSERT INTO submissions (userId, taskId, fileUrl) VALUES (?, ?, ?)',
-        [req.user.id, taskId, fileUrl]
+      // Check validation: at least one submission method is required
+      const hasUrl = !!fileUrl;
+      const hasFile = !!req.file;
+
+      if (!hasUrl && !hasFile) {
+        return res.status(400).json({ error: 'يجب إدخال رابط أو تحميل ملف لتسليم المهمة.' });
+      }
+
+      if (hasUrl && !fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
+        return res.status(400).json({ error: 'رابط الملف غير صالح' });
+      }
+
+      // التحقق من وجود المهمة
+      const task = dbGet('SELECT id, title FROM tasks WHERE id = ?', [taskId]);
+      if (!task) {
+        return res.status(404).json({ error: 'المهمة غير موجودة' });
+      }
+
+      // If they uploaded a file, we process it and upload to Google Drive
+      let fileId = null;
+      let driveUrl = null;
+      let originalName = null;
+
+      if (hasFile) {
+        try {
+          // Upload file to Google Drive using services/storage
+          const uploadResult = await uploadFile(req.file);
+          fileId = uploadResult.id;
+          driveUrl = uploadResult.webViewLink;
+          originalName = req.file.originalname;
+          // Set fileUrl to the drive URL so it can be stored in the legacy field if needed
+          if (!fileUrl) {
+            fileUrl = driveUrl;
+          }
+        } catch (uploadError) {
+          logger.error('Google Drive Upload error: %s', uploadError.stack);
+          return res.status(500).json({ error: 'حدث خطأ أثناء رفع الملف إلى Google Drive' });
+        }
+      }
+
+      const existing = dbGet(
+        'SELECT id, uploadedFileId FROM submissions WHERE userId = ? AND taskId = ?',
+        [req.user.id, taskId]
       );
-      
-      res.status(201).json({ message: 'تم تسليم المهمة بنجاح، في انتظار تقييم المعلم' });
+
+      if (existing) {
+        // If there was an old file in Drive, delete it
+        if (existing.uploadedFileId && hasFile) {
+          try {
+            await deleteFile(existing.uploadedFileId);
+          } catch (deleteError) {
+            logger.warn('Failed to delete old file from Drive: %s', deleteError.message);
+          }
+        }
+
+        dbRun(
+          'UPDATE submissions SET fileUrl = ?, uploadedFileId = ?, uploadedFileUrl = ?, uploadedFileName = ?, storageProvider = ? WHERE id = ?', 
+          [fileUrl, fileId || (hasFile ? null : existing.uploadedFileId), driveUrl || null, originalName || null, hasFile ? 'google-drive' : null, existing.id]
+        );
+        
+        logAudit(req.user.id, 'submission_update', { taskId, taskTitle: task.title, fileUrl }, req);
+        res.json({ message: 'تم تحديث التسليم بنجاح' });
+      } else {
+        dbRun(
+          'INSERT INTO submissions (userId, taskId, fileUrl, uploadedFileId, uploadedFileUrl, uploadedFileName, storageProvider) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [req.user.id, taskId, fileUrl, fileId, driveUrl, originalName, hasFile ? 'google-drive' : null]
+        );
+        
+        logAudit(req.user.id, 'submission_create', { taskId, taskTitle: task.title, fileUrl }, req);
+        res.status(201).json({ message: 'تم تسليم المهمة بنجاح، في انتظار تقييم المعلم' });
+      }
+    } catch (error) {
+      logger.error('Submission error: %s', error.stack);
+      res.status(500).json({ error: 'حدث خطأ أثناء التسليم' });
     }
-  } catch (error) {
-    console.error('Submission error:', error.message);
-    res.status(500).json({ error: 'حدث خطأ أثناء التسليم' });
-  }
+  });
 });
 
 app.get('/api/submissions/me', authenticateToken, (req, res) => {
@@ -236,29 +608,35 @@ app.get('/api/submissions/me', authenticateToken, (req, res) => {
     const submissions = dbAll('SELECT * FROM submissions WHERE userId = ?', [req.user.id]);
     res.json(submissions);
   } catch (error) {
-    console.error('My submissions error:', error.message);
+    logger.error('My submissions error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
 
-app.delete('/api/submissions/:taskId', authenticateToken, (req, res) => {
-  if (req.user.role !== 'student') {
-    return res.status(403).json({ error: 'غير مصرح - للطلاب فقط' });
-  }
-
+app.delete('/api/submissions/:taskId', authenticateToken, requireStudent, async (req, res) => {
   try {
     const taskId = parseInt(req.params.taskId);
     if (!taskId || isNaN(taskId)) {
       return res.status(400).json({ error: 'معرف المهمة مطلوب' });
     }
 
+    const task = dbGet('SELECT title FROM tasks WHERE id = ?', [taskId]);
     const existing = dbGet(
-      'SELECT id, grade FROM submissions WHERE userId = ? AND taskId = ?',
+      'SELECT id, grade, uploadedFileId FROM submissions WHERE userId = ? AND taskId = ?',
       [req.user.id, taskId]
     );
 
     if (!existing) {
       return res.status(404).json({ error: 'لم يتم العثور على تسليم لهذه المهمة' });
+    }
+
+    // Clean up file from Google Drive if exists
+    if (existing.uploadedFileId) {
+      try {
+        await deleteFile(existing.uploadedFileId);
+      } catch (deleteError) {
+        logger.warn('Failed to delete file from Drive on submission delete: %s', deleteError.message);
+      }
     }
 
     if (existing.grade && existing.grade > 0) {
@@ -271,9 +649,10 @@ app.delete('/api/submissions/:taskId', authenticateToken, (req, res) => {
     }
 
     dbRun('DELETE FROM submissions WHERE id = ?', [existing.id]);
+    logAudit(req.user.id, 'submission_delete', { taskId, taskTitle: task ? task.title : 'Unknown' }, req);
     res.json({ message: 'تم إلغاء التسليم بنجاح' });
   } catch (error) {
-    console.error('Cancel submission error:', error.message);
+    logger.error('Cancel submission error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ أثناء إلغاء التسليم' });
   }
 });
@@ -287,15 +666,12 @@ app.get('/api/leaderboard', authenticateToken, (req, res) => {
     const students = dbAll('SELECT name, points FROM users WHERE role = ? ORDER BY points DESC LIMIT 10', ['student']);
     res.json(students);
   } catch (error) {
-    console.error('Leaderboard error:', error.message);
+    logger.error('Leaderboard error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ في جلب الليدر بورد' });
   }
 });
-app.get('/api/admin/submissions', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin' && req.user.role !== 'viewer') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة أو المشاهدين فقط' });
-  }
 
+app.get('/api/admin/submissions', authenticateToken, requireViewerOrAdmin, (req, res) => {
   try {
     const submissions = dbAll(`
       SELECT s.*, u.name as studentName, t.title as taskTitle 
@@ -306,15 +682,12 @@ app.get('/api/admin/submissions', authenticateToken, (req, res) => {
     `);
     res.json(submissions);
   } catch (error) {
-    console.error('Admin submissions error:', error.message);
+    logger.error('Admin submissions error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
 
-app.put('/api/admin/submissions/:id/grade', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
-  }
+app.put('/api/admin/submissions/:id/grade', authenticateToken, requireAdmin, (req, res) => {
   try {
     const { grade } = req.body;
     const newGrade = parseInt(grade);
@@ -335,20 +708,16 @@ app.put('/api/admin/submissions/:id/grade', authenticateToken, (req, res) => {
     }
 
     dbRun('UPDATE submissions SET grade = ? WHERE id = ?', [newGrade, req.params.id]);
+    logAudit(req.user.id, 'grade_submission', { submissionId: req.params.id, grade: newGrade, studentId: sub.userId }, req);
 
     res.json({ message: 'تم التقييم بنجاح', grade: newGrade });
   } catch (error) {
-    console.error('Grade error:', error.message);
+    logger.error('Grade error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ أثناء التقييم' });
   }
 });
 
-
-app.get('/api/admin/students', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin' && req.user.role !== 'viewer') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة أو المشاهدين فقط' });
-  }
-
+app.get('/api/admin/students', authenticateToken, requireViewerOrAdmin, (req, res) => {
   try {
     const students = dbAll(`
       SELECT u.id, u.name, u.username, u.points, u.fill_card_count,
@@ -362,15 +731,12 @@ app.get('/api/admin/students', authenticateToken, (req, res) => {
 
     res.json(students);
   } catch (error) {
-    console.error('Admin students error:', error.message);
+    logger.error('Admin students error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
 
-app.put('/api/admin/students/:id/fill-card', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
-  }
+app.put('/api/admin/students/:id/fill-card', authenticateToken, requireAdmin, (req, res) => {
   try {
     const { action } = req.body; // 'increment' or 'decrement'
     const student = dbGet('SELECT fill_card_count FROM users WHERE id = ? AND role = ?', [req.params.id, 'student']);
@@ -381,19 +747,17 @@ app.put('/api/admin/students/:id/fill-card', authenticateToken, (req, res) => {
     if (action === 'decrement' && newCount > 0) newCount--;
 
     dbRun('UPDATE users SET fill_card_count = ? WHERE id = ?', [newCount, req.params.id]);
+    logAudit(req.user.id, 'student_fill_card', { studentId: req.params.id, action, fillCardCount: newCount }, req);
     res.json({ message: 'تم التحديث بنجاح', fill_card_count: newCount });
   } catch (error) {
-    console.error('Update fill card error:', error.message);
+    logger.error('Update fill card error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ أثناء تحديث الفيل كارد' });
   }
 });
 
-app.delete('/api/admin/students/:id', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
-  }
+app.delete('/api/admin/students/:id', authenticateToken, requireAdmin, (req, res) => {
   try {
-    const student = dbGet('SELECT id FROM users WHERE id = ? AND role = ?', [req.params.id, 'student']);
+    const student = dbGet('SELECT id, name, username FROM users WHERE id = ? AND role = ?', [req.params.id, 'student']);
     if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
     
     // Submissions, ratings, and attendance are cascade deleted due to FOREIGN KEY ON DELETE CASCADE
@@ -404,17 +768,15 @@ app.delete('/api/admin/students/:id', authenticateToken, (req, res) => {
     dbRun('DELETE FROM ratings WHERE userId = ?', [req.params.id]);
     dbRun('DELETE FROM users WHERE id = ?', [req.params.id]);
     
+    logAudit(req.user.id, 'student_delete', { studentId: req.params.id, username: student.username, name: student.name }, req);
     res.json({ message: 'تم حذف الطالب بنجاح' });
   } catch (error) {
-    console.error('Delete student error:', error.message);
+    logger.error('Delete student error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
 
-app.post('/api/admin/students', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
-  }
+app.post('/api/admin/students', authenticateToken, requireAdmin, (req, res) => {
   try {
     const { name, username, password, points } = req.body;
     if (!name || !username || !password) return res.status(400).json({ error: 'الاسم واسم المستخدم وكلمة المرور مطلوبة' });
@@ -433,17 +795,15 @@ app.post('/api/admin/students', authenticateToken, (req, res) => {
     dbRun('INSERT INTO users (name, username, password, role, points) VALUES (?, ?, ?, ?, ?)',
       [cleanName, cleanUsername, hashedPassword, 'student', p]);
     
+    logAudit(req.user.id, 'student_create', { username: cleanUsername, name: cleanName, points: p }, req);
     res.json({ message: 'تم إضافة الطالب بنجاح' });
   } catch (err) {
-    console.error('Add student error:', err.message);
+    logger.error('Add student error: %s', err.stack);
     res.status(500).json({ error: 'حدث خطأ أثناء إضافة الطالب' });
   }
 });
 
-app.put('/api/admin/students/:id', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
-  }
+app.put('/api/admin/students/:id', authenticateToken, requireAdmin, (req, res) => {
   try {
     const { name, username, password, points } = req.body;
     if (!name || !username) return res.status(400).json({ error: 'الاسم واسم المستخدم مطلوبان' });
@@ -470,17 +830,15 @@ app.put('/api/admin/students/:id', authenticateToken, (req, res) => {
         [cleanName, cleanUsername, p, req.params.id]);
     }
     
+    logAudit(req.user.id, 'student_update', { studentId: req.params.id, username: cleanUsername, name: cleanName, points: p }, req);
     res.json({ message: 'تم التعديل بنجاح' });
   } catch (err) {
-    console.error('Update student error:', err.message);
+    logger.error('Update student error: %s', err.stack);
     res.status(500).json({ error: 'حدث خطأ أثناء تعديل بيانات الطالب' });
   }
 });
 
-app.post('/api/admin/lectures', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
-  }
+app.post('/api/admin/lectures', authenticateToken, requireAdmin, (req, res) => {
   try {
     const { title, description, materialUrl } = req.body;
     if (!title || !materialUrl) return res.status(400).json({ error: 'العنوان ورابط الماتيريال مطلوبان' });
@@ -497,40 +855,45 @@ app.post('/api/admin/lectures', authenticateToken, (req, res) => {
       [sanitize(title), sanitize(description || ''), lectureId, today, 10, 5, req.user.id]
     );
     
+    logAudit(req.user.id, 'lecture_create', { lectureId, title }, req);
     res.json({ message: 'تمت إضافة المحاضرة وجلسة الحضور بنجاح' });
   } catch (err) {
+    logger.error('Add lecture error: %s', err.stack);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
 
-app.put('/api/admin/lectures/:id', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'غير مصرح' });
+app.put('/api/admin/lectures/:id', authenticateToken, requireAdmin, (req, res) => {
   try {
     const { title, description, materialUrl } = req.body;
     dbRun('UPDATE lectures SET title = ?, description = ?, materialUrl = ? WHERE id = ?',
       [sanitize(title), sanitize(description), sanitize(materialUrl), req.params.id]);
+    
+    logAudit(req.user.id, 'lecture_update', { lectureId: req.params.id, title }, req);
     res.json({ message: 'تم التعديل بنجاح' });
   } catch (err) {
+    logger.error('Update lecture error: %s', err.stack);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
 
-app.delete('/api/admin/lectures/:id', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'غير مصرح' });
+app.delete('/api/admin/lectures/:id', authenticateToken, requireAdmin, (req, res) => {
   try {
-    const lecture = dbGet('SELECT id FROM lectures WHERE id = ?', [req.params.id]);
+    const lecture = dbGet('SELECT id, title FROM lectures WHERE id = ?', [req.params.id]);
     if (!lecture) return res.status(404).json({ error: 'المحاضرة غير موجودة' });
     
     dbRun('DELETE FROM ratings WHERE lectureId = ?', [req.params.id]);
     dbRun('DELETE FROM lectures WHERE id = ?', [req.params.id]);
+    
+    logAudit(req.user.id, 'lecture_delete', { lectureId: req.params.id, title: lecture.title }, req);
     res.json({ message: 'تم حذف المحاضرة بنجاح' });
   } catch (err) {
+    logger.error('Delete lecture error: %s', err.stack);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
 
-app.post('/api/lectures/:id/rate', authenticateToken, (req, res) => {
-  if (req.user.role !== 'student') return res.status(403).json({ error: 'للطلاب فقط' });
+app.post('/api/lectures/:id/rate', authenticateToken, requireStudent, (req, res) => {
   try {
     const rating = parseInt(req.body.rating);
     const comment = req.body.comment ? sanitize(req.body.comment) : null;
@@ -543,8 +906,11 @@ app.post('/api/lectures/:id/rate', authenticateToken, (req, res) => {
     } else {
       dbRun('INSERT INTO ratings (userId, lectureId, rating, comment) VALUES (?, ?, ?, ?)', [req.user.id, lectureId, rating, comment]);
     }
+    
+    logAudit(req.user.id, 'lecture_rate', { lectureId, rating }, req);
     res.json({ message: 'تم حفظ التقييم' });
   } catch (err) {
+    logger.error('Rate lecture error: %s', err.stack);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
@@ -554,14 +920,12 @@ app.get('/api/lectures/:id/my-rating', authenticateToken, (req, res) => {
     const ratingData = dbGet('SELECT rating, comment FROM ratings WHERE userId = ? AND lectureId = ?', [req.user.id, req.params.id]);
     res.json({ rating: ratingData ? ratingData.rating : 0, comment: ratingData ? ratingData.comment : '' });
   } catch (err) {
+    logger.error('Get my rating error: %s', err.stack);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
 
-app.get('/api/admin/lectures/:id/ratings', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin' && req.user.role !== 'viewer') {
-    return res.status(403).json({ error: 'غير مصرح' });
-  }
+app.get('/api/admin/lectures/:id/ratings', authenticateToken, requireViewerOrAdmin, (req, res) => {
   try {
     const ratings = dbAll(`
       SELECT r.rating, r.comment, r.created_at, u.name as studentName 
@@ -572,6 +936,7 @@ app.get('/api/admin/lectures/:id/ratings', authenticateToken, (req, res) => {
     `, [req.params.id]);
     res.json(ratings);
   } catch (err) {
+    logger.error('Get lecture ratings error: %s', err.stack);
     res.status(500).json({ error: 'حدث خطأ في جلب التقييمات' });
   }
 });
@@ -584,50 +949,53 @@ app.get('/api/tasks', authenticateToken, (req, res) => {
     const tasks = dbAll('SELECT * FROM tasks ORDER BY created_at DESC');
     res.json(tasks);
   } catch (error) {
-    console.error('Tasks error:', error.message);
+    logger.error('Tasks error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ في جلب المهام' });
   }
 });
 
-app.post('/api/admin/tasks', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
-  }
+app.post('/api/admin/tasks', authenticateToken, requireAdmin, (req, res) => {
   try {
     const { title, description, taskUrl } = req.body;
     if (!title || !taskUrl) return res.status(400).json({ error: 'العنوان ورابط المهمة مطلوبان' });
     
-    dbRun('INSERT INTO tasks (title, description, taskUrl) VALUES (?, ?, ?)', 
+    const result = dbRun('INSERT INTO tasks (title, description, taskUrl) VALUES (?, ?, ?)', 
       [sanitize(title), sanitize(description), sanitize(taskUrl)]);
     
+    logAudit(req.user.id, 'task_create', { taskId: result.lastInsertRowid, title }, req);
     res.json({ message: 'تمت إضافة المهمة بنجاح' });
   } catch (err) {
+    logger.error('Create task error: %s', err.stack);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
 
-app.put('/api/admin/tasks/:id', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'غير مصرح' });
+app.put('/api/admin/tasks/:id', authenticateToken, requireAdmin, (req, res) => {
   try {
     const { title, description, taskUrl } = req.body;
     dbRun('UPDATE tasks SET title = ?, description = ?, taskUrl = ? WHERE id = ?',
       [sanitize(title), sanitize(description), sanitize(taskUrl), req.params.id]);
+    
+    logAudit(req.user.id, 'task_update', { taskId: req.params.id, title }, req);
     res.json({ message: 'تم التعديل بنجاح' });
   } catch (err) {
+    logger.error('Update task error: %s', err.stack);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
 
-app.delete('/api/admin/tasks/:id', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'غير مصرح' });
+app.delete('/api/admin/tasks/:id', authenticateToken, requireAdmin, (req, res) => {
   try {
-    const task = dbGet('SELECT id FROM tasks WHERE id = ?', [req.params.id]);
+    const task = dbGet('SELECT id, title FROM tasks WHERE id = ?', [req.params.id]);
     if (!task) return res.status(404).json({ error: 'المهمة غير موجودة' });
     
     dbRun('DELETE FROM submissions WHERE taskId = ?', [req.params.id]);
     dbRun('DELETE FROM tasks WHERE id = ?', [req.params.id]);
+    
+    logAudit(req.user.id, 'task_delete', { taskId: req.params.id, title: task.title }, req);
     res.json({ message: 'تم حذف المهمة بنجاح' });
   } catch (err) {
+    logger.error('Delete task error: %s', err.stack);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
@@ -637,10 +1005,7 @@ app.delete('/api/admin/tasks/:id', authenticateToken, (req, res) => {
 // =======================
 
 // --- List all sessions with stats ---
-app.get('/api/admin/attendance/sessions', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin' && req.user.role !== 'viewer') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة أو المشاهدين فقط' });
-  }
+app.get('/api/admin/attendance/sessions', authenticateToken, requireViewerOrAdmin, (req, res) => {
   try {
     const sessions = dbAll(`
       SELECT s.*,
@@ -659,16 +1024,13 @@ app.get('/api/admin/attendance/sessions', authenticateToken, (req, res) => {
     `);
     res.json(sessions);
   } catch (error) {
-    console.error('Attendance sessions error:', error.message);
+    logger.error('Attendance sessions error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ في جلب جلسات الحضور' });
   }
 });
 
 // --- Create session ---
-app.post('/api/admin/attendance/sessions', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
-  }
+app.post('/api/admin/attendance/sessions', authenticateToken, requireAdmin, (req, res) => {
   try {
     const { title, description, notes, lectureId, attendanceDate, bonusPoints, latePoints } = req.body;
     if (!title || !title.trim()) return res.status(400).json({ error: 'عنوان الجلسة مطلوب' });
@@ -692,18 +1054,16 @@ app.post('/api/admin/attendance/sessions', authenticateToken, (req, res) => {
       [sanitize(title), sanitize(description || ''), sanitize(notes || ''), lid, attendanceDate, bp, lp, req.user.id]
     );
 
+    logAudit(req.user.id, 'attendance_session_create', { sessionId: result.lastInsertRowid, title, attendanceDate }, req);
     res.status(201).json({ message: 'تم إنشاء جلسة الحضور بنجاح', id: result.lastInsertRowid });
   } catch (error) {
-    console.error('Create attendance session error:', error.message);
+    logger.error('Create attendance session error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ أثناء إنشاء الجلسة' });
   }
 });
 
 // --- Update session ---
-app.put('/api/admin/attendance/sessions/:id', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
-  }
+app.put('/api/admin/attendance/sessions/:id', authenticateToken, requireAdmin, (req, res) => {
   try {
     const session = dbGet('SELECT * FROM attendance_sessions WHERE id = ?', [req.params.id]);
     if (!session) return res.status(404).json({ error: 'الجلسة غير موجودة' });
@@ -747,18 +1107,16 @@ app.put('/api/admin/attendance/sessions/:id', authenticateToken, (req, res) => {
       [sanitize(title), sanitize(description || ''), sanitize(notes || ''), lid, attendanceDate || session.attendanceDate, bp, lp, req.params.id]
     );
 
+    logAudit(req.user.id, 'attendance_session_update', { sessionId: req.params.id, title, attendanceDate }, req);
     res.json({ message: 'تم تعديل الجلسة بنجاح' });
   } catch (error) {
-    console.error('Update attendance session error:', error.message);
+    logger.error('Update attendance session error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ أثناء تعديل الجلسة' });
   }
 });
 
 // --- Delete session (with full points rollback) ---
-app.delete('/api/admin/attendance/sessions/:id', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
-  }
+app.delete('/api/admin/attendance/sessions/:id', authenticateToken, requireAdmin, (req, res) => {
   try {
     const session = dbGet('SELECT * FROM attendance_sessions WHERE id = ?', [req.params.id]);
     if (!session) return res.status(404).json({ error: 'الجلسة غير موجودة' });
@@ -775,18 +1133,17 @@ app.delete('/api/admin/attendance/sessions/:id', authenticateToken, (req, res) =
 
     // CASCADE will delete attendance_records
     dbRun('DELETE FROM attendance_sessions WHERE id = ?', [req.params.id]);
+    
+    logAudit(req.user.id, 'attendance_session_delete', { sessionId: req.params.id, title: session.title }, req);
     res.json({ message: 'تم حذف الجلسة واستعادة النقاط بنجاح' });
   } catch (error) {
-    console.error('Delete attendance session error:', error.message);
+    logger.error('Delete attendance session error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ أثناء حذف الجلسة' });
   }
 });
 
 // --- Lock/Unlock session ---
-app.put('/api/admin/attendance/sessions/:id/lock', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
-  }
+app.put('/api/admin/attendance/sessions/:id/lock', authenticateToken, requireAdmin, (req, res) => {
   try {
     const session = dbGet('SELECT * FROM attendance_sessions WHERE id = ?', [req.params.id]);
     if (!session) return res.status(404).json({ error: 'الجلسة غير موجودة' });
@@ -794,21 +1151,19 @@ app.put('/api/admin/attendance/sessions/:id/lock', authenticateToken, (req, res)
     const newLocked = session.isLocked ? 0 : 1;
     dbRun('UPDATE attendance_sessions SET isLocked = ? WHERE id = ?', [newLocked, req.params.id]);
 
+    logAudit(req.user.id, newLocked ? 'attendance_session_lock' : 'attendance_session_unlock', { sessionId: req.params.id, title: session.title }, req);
     res.json({
       message: newLocked ? 'تم قفل الجلسة بنجاح' : 'تم فتح الجلسة بنجاح',
       isLocked: !!newLocked
     });
   } catch (error) {
-    console.error('Lock attendance session error:', error.message);
+    logger.error('Lock attendance session error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
 
 // --- Get records for a session ---
-app.get('/api/admin/attendance/sessions/:id/records', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin' && req.user.role !== 'viewer') {
-    return res.status(403).json({ error: 'غير مصرح' });
-  }
+app.get('/api/admin/attendance/sessions/:id/records', authenticateToken, requireViewerOrAdmin, (req, res) => {
   try {
     const session = dbGet('SELECT * FROM attendance_sessions WHERE id = ?', [req.params.id]);
     if (!session) return res.status(404).json({ error: 'الجلسة غير موجودة' });
@@ -825,16 +1180,13 @@ app.get('/api/admin/attendance/sessions/:id/records', authenticateToken, (req, r
 
     res.json({ session, students });
   } catch (error) {
-    console.error('Attendance records error:', error.message);
+    logger.error('Attendance records error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ في جلب سجلات الحضور' });
   }
 });
 
 // --- Bulk mark attendance ---
-app.post('/api/admin/attendance/sessions/:id/records', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
-  }
+app.post('/api/admin/attendance/sessions/:id/records', authenticateToken, requireAdmin, (req, res) => {
   try {
     const session = dbGet('SELECT * FROM attendance_sessions WHERE id = ?', [req.params.id]);
     if (!session) return res.status(404).json({ error: 'الجلسة غير موجودة' });
@@ -897,18 +1249,16 @@ app.post('/api/admin/attendance/sessions/:id/records', authenticateToken, (req, 
       }
     }
 
+    logAudit(req.user.id, 'attendance_records_mark', { sessionId: req.params.id, title: session.title, recordsCount: records.length, pointsChanged }, req);
     res.json({ message: 'تم حفظ الحضور بنجاح', pointsChanged });
   } catch (error) {
-    console.error('Mark attendance error:', error.message);
+    logger.error('Mark attendance error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ أثناء حفظ الحضور' });
   }
 });
 
 // --- Attendance analytics ---
-app.get('/api/admin/attendance/analytics', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin' && req.user.role !== 'viewer') {
-    return res.status(403).json({ error: 'غير مصرح' });
-  }
+app.get('/api/admin/attendance/analytics', authenticateToken, requireViewerOrAdmin, (req, res) => {
   try {
     const totalSessions = dbGet('SELECT COUNT(*) as count FROM attendance_sessions').count;
     const totalRecords = dbGet('SELECT COUNT(*) as count FROM attendance_records').count;
@@ -973,7 +1323,7 @@ app.get('/api/admin/attendance/analytics', authenticateToken, (req, res) => {
       trends: trends.reverse()
     });
   } catch (error) {
-    console.error('Attendance analytics error:', error.message);
+    logger.error('Attendance analytics error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ في جلب إحصائيات الحضور' });
   }
 });
@@ -1005,7 +1355,7 @@ app.get('/api/attendance/me', authenticateToken, (req, res) => {
 
     res.json({ records, totalSessions, attended, totalPoints, attendanceRate, streak });
   } catch (error) {
-    console.error('Student attendance error:', error.message);
+    logger.error('Student attendance error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ في جلب سجل الحضور' });
   }
 });
@@ -1153,11 +1503,7 @@ function buildExportPayload(scope = 'full') {
 }
 
 // --- Export ---
-app.get('/api/admin/export', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
-  }
-
+app.get('/api/admin/export', authenticateToken, requireAdmin, (req, res) => {
   try {
     const scope = ['full', 'users', 'content', 'submissions'].includes(req.query.scope)
       ? req.query.scope : 'full';
@@ -1167,21 +1513,19 @@ app.get('/api/admin/export', authenticateToken, (req, res) => {
     const date = new Date().toISOString().slice(0, 10);
     const filename = `lms-backup-${scope}-${date}.json`;
 
+    logAudit(req.user.id, 'db_export', { scope, filename }, req);
+
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(json);
   } catch (error) {
-    console.error('Export error:', error.message);
+    logger.error('Export error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ أثناء تصدير البيانات' });
   }
 });
 
 // --- Validate / Dry-Run ---
-app.post('/api/admin/validate-backup', authenticateToken, express.json({ limit: '50mb' }), (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
-  }
-
+app.post('/api/admin/validate-backup', authenticateToken, requireAdmin, express.json({ limit: '50mb' }), (req, res) => {
   try {
     const backupData = req.body;
     const validation = validateBackupSchema(backupData);
@@ -1224,17 +1568,13 @@ app.post('/api/admin/validate-backup', authenticateToken, express.json({ limit: 
       warnings: validation.warnings || [],
     });
   } catch (error) {
-    console.error('Validate error:', error.message);
+    logger.error('Validate error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ أثناء التحقق من الملف' });
   }
 });
 
 // --- Import / Restore ---
-app.post('/api/admin/import', authenticateToken, express.json({ limit: '50mb' }), (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
-  }
-
+app.post('/api/admin/import', authenticateToken, requireAdmin, express.json({ limit: '50mb' }), (req, res) => {
   try {
     const backupData = req.body;
 
@@ -1251,7 +1591,7 @@ app.post('/api/admin/import', authenticateToken, express.json({ limit: '50mb' })
     const backupFilename = `pre-import-${timestamp}.json`;
     const backupPath = path.join(BACKUPS_DIR, backupFilename);
     fs.writeFileSync(backupPath, JSON.stringify(preBackup, null, 2), 'utf-8');
-    console.log(`✅ Pre-import backup saved: ${backupFilename}`);
+    logger.info(`[Import] Pre-import backup saved: ${backupFilename}`);
 
     // Perform import in a transaction with auto-rollback
     let importSuccess = false;
@@ -1321,7 +1661,7 @@ app.post('/api/admin/import', authenticateToken, express.json({ limit: '50mb' })
 
       importSuccess = true;
     } catch (importError) {
-      console.error('Import failed, attempting auto-rollback:', importError.message);
+      logger.error('Import failed, attempting auto-rollback: %s', importError.stack);
 
       // Auto-rollback: restore from the pre-import backup
       try {
@@ -1367,14 +1707,14 @@ app.post('/api/admin/import', authenticateToken, express.json({ limit: '50mb' })
             [ar.id, ar.sessionId, ar.studentId, ar.status, ar.awardedPoints || 0, ar.created_at]);
         }
 
-        console.log('✅ Auto-rollback successful — data restored to pre-import state');
+        logger.info('[Import Rollback] Auto-rollback successful — data restored to pre-import state');
         return res.status(500).json({
           error: 'فشل الاستيراد — تم استعادة البيانات السابقة تلقائياً',
           rollback: true,
           details: importError.message,
         });
       } catch (rollbackError) {
-        console.error('CRITICAL: Rollback also failed:', rollbackError.message);
+        logger.error('CRITICAL: Rollback also failed: %s', rollbackError.stack);
         return res.status(500).json({
           error: 'فشل الاستيراد وفشلت الاستعادة التلقائية — يرجى استعادة النسخة الاحتياطية يدوياً',
           rollback: false,
@@ -1393,7 +1733,8 @@ app.post('/api/admin/import', authenticateToken, express.json({ limit: '50mb' })
         attendance_sessions: (backupData.data.attendance_sessions || []).length,
         attendance_records: (backupData.data.attendance_records || []).length,
       };
-      console.log('✅ Import completed successfully:', summary);
+      logger.info('[Import] Import completed successfully: %o', summary);
+      logAudit(req.user.id, 'db_import', { summary, preImportBackup: backupFilename }, req);
       res.json({
         message: 'تم استيراد البيانات بنجاح',
         summary,
@@ -1401,21 +1742,17 @@ app.post('/api/admin/import', authenticateToken, express.json({ limit: '50mb' })
       });
     }
   } catch (error) {
-    console.error('Import error:', error.message);
+    logger.error('Import error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ أثناء استيراد البيانات' });
   }
 });
 
 // --- Backup History ---
-app.get('/api/admin/backups', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
-  }
-
+app.get('/api/admin/backups', authenticateToken, requireAdmin, (req, res) => {
   try {
     ensureBackupsDir();
     const files = fs.readdirSync(BACKUPS_DIR)
-      .filter(f => f.endsWith('.json'))
+      .filter(f => f.endsWith('.json') || f.endsWith('.db'))
       .map(filename => {
         const filePath = path.join(BACKUPS_DIR, filename);
         const stats = fs.statSync(filePath);
@@ -1429,20 +1766,16 @@ app.get('/api/admin/backups', authenticateToken, (req, res) => {
 
     res.json(files);
   } catch (error) {
-    console.error('Backup list error:', error.message);
+    logger.error('Backup list error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ في جلب قائمة النسخ الاحتياطية' });
   }
 });
 
 // --- Download Backup ---
-app.get('/api/admin/backups/:filename', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
-  }
-
+app.get('/api/admin/backups/:filename', authenticateToken, requireAdmin, (req, res) => {
   try {
     const filename = path.basename(req.params.filename); // Prevent path traversal
-    if (!filename.endsWith('.json')) {
+    if (!filename.endsWith('.json') && !filename.endsWith('.db')) {
       return res.status(400).json({ error: 'نوع الملف غير مدعوم' });
     }
 
@@ -1451,24 +1784,26 @@ app.get('/api/admin/backups/:filename', authenticateToken, (req, res) => {
       return res.status(404).json({ error: 'النسخة الاحتياطية غير موجودة' });
     }
 
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    logAudit(req.user.id, 'db_backup_download', { filename }, req);
+
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    if (filename.endsWith('.json')) {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    } else {
+      res.setHeader('Content-Type', 'application/octet-stream');
+    }
     res.sendFile(filePath);
   } catch (error) {
-    console.error('Backup download error:', error.message);
+    logger.error('Backup download error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ أثناء تحميل النسخة الاحتياطية' });
   }
 });
 
 // --- Delete Backup ---
-app.delete('/api/admin/backups/:filename', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح - للإدارة فقط' });
-  }
-
+app.delete('/api/admin/backups/:filename', authenticateToken, requireAdmin, (req, res) => {
   try {
     const filename = path.basename(req.params.filename); // Prevent path traversal
-    if (!filename.endsWith('.json')) {
+    if (!filename.endsWith('.json') && !filename.endsWith('.db')) {
       return res.status(400).json({ error: 'نوع الملف غير مدعوم' });
     }
 
@@ -1478,12 +1813,70 @@ app.delete('/api/admin/backups/:filename', authenticateToken, (req, res) => {
     }
 
     fs.unlinkSync(filePath);
+    logAudit(req.user.id, 'db_backup_delete', { filename }, req);
     res.json({ message: 'تم حذف النسخة الاحتياطية بنجاح' });
   } catch (error) {
-    console.error('Backup delete error:', error.message);
+    logger.error('Backup delete error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ أثناء حذف النسخة الاحتياطية' });
   }
 });
+
+// ==============================
+// Automatic SQLite Backup Scheduler
+// ==============================
+function runDatabaseBackup() {
+  try {
+    ensureBackupsDir();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `auto-backup-${timestamp}.db`;
+    const destPath = path.join(BACKUPS_DIR, filename);
+
+    logger.info(`[Backup] Starting automatic database backup...`);
+    dbBackup(destPath)
+      .then(() => {
+        logger.info(`[Backup] Database backup completed successfully: ${filename}`);
+        cleanupOldBackups();
+      })
+      .catch(err => {
+        logger.error(`[Backup Error] Database backup failed: %s`, err.stack);
+      });
+  } catch (err) {
+    logger.error(`[Backup Error] Failed to launch database backup: %s`, err.stack);
+  }
+}
+
+function cleanupOldBackups() {
+  try {
+    ensureBackupsDir();
+    const files = fs.readdirSync(BACKUPS_DIR)
+      .filter(f => f.startsWith('auto-backup-') && f.endsWith('.db'))
+      .map(filename => {
+        const filePath = path.join(BACKUPS_DIR, filename);
+        const stats = fs.statSync(filePath);
+        return { filename, filePath, mtime: stats.mtime };
+      })
+      .sort((a, b) => b.mtime - a.mtime); // Newest first
+
+    if (files.length > 10) {
+      const toDelete = files.slice(10);
+      for (const file of toDelete) {
+        fs.unlinkSync(file.filePath);
+        logger.info(`[Backup Cleanup] Deleted old database backup: ${file.filename}`);
+      }
+    }
+  } catch (err) {
+    logger.error(`[Backup Cleanup Error] Failed to cleanup old backups: %s`, err.stack);
+  }
+}
+
+function scheduleAutoBackup() {
+  // Run once immediately on startup
+  runDatabaseBackup();
+  // Schedule to run every 24 hours (24 * 60 * 60 * 1000 ms)
+  setInterval(() => {
+    runDatabaseBackup();
+  }, 24 * 60 * 60 * 1000);
+}
 
 // ==============================
 // SPA Fallback Route
@@ -1508,7 +1901,7 @@ app.use((req, res) => {
 // Error Handling Middleware
 // ==============================
 app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err.message);
+  logger.error('Unhandled server error: %s', err.stack);
   res.status(500).json({ error: 'حدث خطأ غير متوقع في الخادم' });
 });
 
@@ -1519,16 +1912,19 @@ async function startServer() {
   try {
     // اتصال قاعدة البيانات أولاً
     await setupDB();
-    console.log('✅ Database connected successfully!');
+    logger.info('Database connected successfully!');
+
+    // Initialize auto-backup scheduler
+    scheduleAutoBackup();
 
     // ثم بدء السيرفر
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 Server running perfectly!`);
-      console.log(`🌍 Main Website: http://localhost:${PORT}`);
-      console.log(`📡 Health check: http://localhost:${PORT}/health`);
+      logger.info(`Server running perfectly on port ${PORT}!`);
+      logger.info(`Main Website: http://localhost:${PORT}`);
+      logger.info(`Health check: http://localhost:${PORT}/health`);
     });
   } catch (err) {
-    console.error('❌ Failed to start server:', err.message);
+    logger.error('Failed to start server: %s', err.stack);
     process.exit(1);
   }
 }
