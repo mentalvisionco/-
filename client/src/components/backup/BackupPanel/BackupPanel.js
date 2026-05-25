@@ -26,6 +26,8 @@ const TABLE_LABELS = {
   tasks: 'المهام',
   submissions: 'التسليمات',
   ratings: 'التقييمات',
+  attendance_sessions: 'جلسات الحضور',
+  attendance_records: 'سجلات الحضور',
 };
 
 function formatFileSize(bytes) {

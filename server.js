@@ -1541,6 +1541,8 @@ app.post('/api/admin/validate-backup', authenticateToken, requireAdmin, express.
       tasks: dbGet('SELECT COUNT(*) as c FROM tasks').c,
       submissions: dbGet('SELECT COUNT(*) as c FROM submissions').c,
       ratings: dbGet('SELECT COUNT(*) as c FROM ratings').c,
+      attendance_sessions: dbGet('SELECT COUNT(*) as c FROM attendance_sessions').c,
+      attendance_records: dbGet('SELECT COUNT(*) as c FROM attendance_records').c,
     };
 
     const importCounts = {
@@ -1549,6 +1551,8 @@ app.post('/api/admin/validate-backup', authenticateToken, requireAdmin, express.
       tasks: backupData.data.tasks.length,
       submissions: backupData.data.submissions.length,
       ratings: backupData.data.ratings.length,
+      attendance_sessions: (backupData.data.attendance_sessions || []).length,
+      attendance_records: (backupData.data.attendance_records || []).length,
     };
 
     const conflicts = [];
@@ -1612,8 +1616,8 @@ app.post('/api/admin/import', authenticateToken, requireAdmin, express.json({ li
 
       for (const u of users) {
         dbRun(
-          'INSERT INTO users (id, name, username, password, role, points, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [u.id, sanitizeBackupString(u.name), sanitizeBackupString(u.username || u.email), u.password, u.role, u.points || 0, u.created_at || new Date().toISOString()]
+          'INSERT INTO users (id, name, username, password, role, points, fill_card_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [u.id, sanitizeBackupString(u.name), sanitizeBackupString(u.username || u.email), u.password, u.role, u.points || 0, u.fill_card_count || 0, u.created_at || new Date().toISOString()]
         );
       }
 
@@ -1633,8 +1637,8 @@ app.post('/api/admin/import', authenticateToken, requireAdmin, express.json({ li
 
       for (const s of submissions) {
         dbRun(
-          'INSERT INTO submissions (id, userId, taskId, fileUrl, grade, feedback, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [s.id, s.userId, s.taskId, sanitizeBackupString(s.fileUrl), s.grade || null, sanitizeBackupString(s.feedback), s.created_at || new Date().toISOString()]
+          'INSERT INTO submissions (id, userId, taskId, fileUrl, uploadedFileId, uploadedFileUrl, uploadedFileName, storageProvider, grade, feedback, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [s.id, s.userId, s.taskId, sanitizeBackupString(s.fileUrl), s.uploadedFileId || null, s.uploadedFileUrl || null, s.uploadedFileName || null, s.storageProvider || null, s.grade || null, sanitizeBackupString(s.feedback), s.created_at || new Date().toISOString()]
         );
       }
 
@@ -1647,15 +1651,15 @@ app.post('/api/admin/import', authenticateToken, requireAdmin, express.json({ li
 
       for (const as of attSessions) {
         dbRun(
-          'INSERT INTO attendance_sessions (id, title, description, notes, lectureId, attendanceDate, bonusPoints, isLocked, createdBy, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [as.id, sanitizeBackupString(as.title), sanitizeBackupString(as.description), sanitizeBackupString(as.notes), as.lectureId, as.attendanceDate, as.bonusPoints || 10, as.isLocked || 0, as.createdBy, as.created_at || new Date().toISOString()]
+          'INSERT INTO attendance_sessions (id, title, description, notes, lectureId, attendanceDate, bonusPoints, latePoints, isLocked, createdBy, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [as.id, sanitizeBackupString(as.title), sanitizeBackupString(as.description), sanitizeBackupString(as.notes), as.lectureId, as.attendanceDate, as.bonusPoints || 10, as.latePoints || 5, as.isLocked || 0, as.createdBy, as.created_at || new Date().toISOString()]
         );
       }
 
       for (const ar of attRecords) {
         dbRun(
-          'INSERT INTO attendance_records (id, sessionId, studentId, status, awardedPoints, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-          [ar.id, ar.sessionId, ar.studentId, ar.status, ar.awardedPoints || 0, ar.created_at || new Date().toISOString()]
+          'INSERT INTO attendance_records (id, sessionId, studentId, status, awardedPoints, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [ar.id, ar.sessionId, ar.studentId, ar.status, ar.awardedPoints || 0, sanitizeBackupString(ar.notes) || null, ar.created_at || new Date().toISOString()]
         );
       }
 
@@ -1679,8 +1683,8 @@ app.post('/api/admin/import', authenticateToken, requireAdmin, express.json({ li
         const rbAttRecords = rollbackData.data.attendance_records || [];
 
         for (const u of users) {
-          dbRun('INSERT INTO users (id, name, username, password, role, points, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [u.id, u.name, u.username || u.email, u.password, u.role, u.points || 0, u.created_at]);
+          dbRun('INSERT INTO users (id, name, username, password, role, points, fill_card_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [u.id, u.name, u.username || u.email, u.password, u.role, u.points || 0, u.fill_card_count || 0, u.created_at]);
         }
         for (const l of lectures) {
           dbRun('INSERT INTO lectures (id, title, description, materialUrl, orderNum, created_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -1691,20 +1695,20 @@ app.post('/api/admin/import', authenticateToken, requireAdmin, express.json({ li
             [t.id, t.title, t.description, t.taskUrl, t.created_at]);
         }
         for (const s of submissions) {
-          dbRun('INSERT INTO submissions (id, userId, taskId, fileUrl, grade, feedback, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [s.id, s.userId, s.taskId, s.fileUrl, s.grade || null, s.feedback, s.created_at]);
+          dbRun('INSERT INTO submissions (id, userId, taskId, fileUrl, uploadedFileId, uploadedFileUrl, uploadedFileName, storageProvider, grade, feedback, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [s.id, s.userId, s.taskId, s.fileUrl, s.uploadedFileId || null, s.uploadedFileUrl || null, s.uploadedFileName || null, s.storageProvider || null, s.grade || null, s.feedback, s.created_at]);
         }
         for (const r of ratings) {
           dbRun('INSERT INTO ratings (id, userId, lectureId, rating, comment, created_at) VALUES (?, ?, ?, ?, ?, ?)',
             [r.id, r.userId, r.lectureId, r.rating, r.comment, r.created_at]);
         }
         for (const as of rbAttSessions) {
-          dbRun('INSERT INTO attendance_sessions (id, title, description, notes, lectureId, attendanceDate, bonusPoints, isLocked, createdBy, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [as.id, as.title, as.description, as.notes, as.lectureId, as.attendanceDate, as.bonusPoints || 10, as.isLocked || 0, as.createdBy, as.created_at]);
+          dbRun('INSERT INTO attendance_sessions (id, title, description, notes, lectureId, attendanceDate, bonusPoints, latePoints, isLocked, createdBy, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [as.id, as.title, as.description, as.notes, as.lectureId, as.attendanceDate, as.bonusPoints || 10, as.latePoints || 5, as.isLocked || 0, as.createdBy, as.created_at]);
         }
         for (const ar of rbAttRecords) {
-          dbRun('INSERT INTO attendance_records (id, sessionId, studentId, status, awardedPoints, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-            [ar.id, ar.sessionId, ar.studentId, ar.status, ar.awardedPoints || 0, ar.created_at]);
+          dbRun('INSERT INTO attendance_records (id, sessionId, studentId, status, awardedPoints, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [ar.id, ar.sessionId, ar.studentId, ar.status, ar.awardedPoints || 0, ar.notes || null, ar.created_at]);
         }
 
         logger.info('[Import Rollback] Auto-rollback successful — data restored to pre-import state');
