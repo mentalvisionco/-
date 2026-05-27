@@ -78,8 +78,8 @@ async function setupDB() {
       notes TEXT,
       lectureId INTEGER,
       attendanceDate TEXT NOT NULL,
-      bonusPoints INTEGER DEFAULT 10,
-      latePoints INTEGER DEFAULT 5,
+      bonusPoints INTEGER DEFAULT 50,
+      latePoints INTEGER DEFAULT 35,
       isLocked INTEGER DEFAULT 0,
       createdBy INTEGER NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -131,7 +131,7 @@ async function setupDB() {
 
   // Migrate existing database to add latePoints if it doesn't exist
   try {
-    db.exec('ALTER TABLE attendance_sessions ADD COLUMN latePoints INTEGER DEFAULT 5');
+    db.exec('ALTER TABLE attendance_sessions ADD COLUMN latePoints INTEGER DEFAULT 35');
     console.log('✅ Added latePoints column to attendance_sessions');
   } catch (err) {
     // Column already exists or table doesn't exist yet

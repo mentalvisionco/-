@@ -38,7 +38,7 @@ export default function AttendancePanel() {
   const [showForm, setShowForm] = useState(false);
   const [editSession, setEditSession] = useState(null);
   const [formData, setFormData] = useState({
-    title: '', description: '', notes: '', lectureId: '', attendanceDate: '', bonusPoints: 10, latePoints: 5
+    title: '', description: '', notes: '', lectureId: '', attendanceDate: '', bonusPoints: 50, latePoints: 35
   });
 
   // Confirm
@@ -65,7 +65,7 @@ export default function AttendancePanel() {
   const openCreateForm = () => {
     setEditSession(null);
     const today = new Date().toISOString().split('T')[0];
-    setFormData({ title: '', description: '', notes: '', lectureId: '', attendanceDate: today, bonusPoints: 10, latePoints: 5 });
+    setFormData({ title: '', description: '', notes: '', lectureId: '', attendanceDate: today, bonusPoints: 50, latePoints: 35 });
     setShowForm(true);
   };
 
@@ -78,7 +78,7 @@ export default function AttendancePanel() {
       lectureId: session.lectureId || '',
       attendanceDate: session.attendanceDate,
       bonusPoints: session.bonusPoints,
-      latePoints: session.latePoints !== undefined ? session.latePoints : 5
+      latePoints: session.latePoints !== undefined ? session.latePoints : 35
     });
     setShowForm(true);
   };
@@ -213,7 +213,7 @@ export default function AttendancePanel() {
                   <div className={styles.sessionMeta}>
                     <span className={styles.metaItem}><IconCalendar size={13} /> {session.attendanceDate}</span>
                     <span className={styles.metaItem}><IconStudents size={13} /> {session.totalRecords} طالب</span>
-                    <span className={styles.metaItem}>⭐ ح: {session.bonusPoints} | ت: {session.latePoints !== undefined ? session.latePoints : 5}</span>
+                    <span className={styles.metaItem}>⭐ ح: {session.bonusPoints} | ت: {session.latePoints !== undefined ? session.latePoints : 35}</span>
                     {session.lectureTitle && <span className={styles.metaItem}>📖 {session.lectureTitle}</span>}
                   </div>
                   {session.totalRecords > 0 && (

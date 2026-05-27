@@ -852,7 +852,7 @@ app.post('/api/admin/lectures', authenticateToken, requireAdmin, (req, res) => {
     const today = new Date().toISOString().split('T')[0];
     dbRun(
       'INSERT INTO attendance_sessions (title, description, lectureId, attendanceDate, bonusPoints, latePoints, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [sanitize(title), sanitize(description || ''), lectureId, today, 10, 5, req.user.id]
+      [sanitize(title), sanitize(description || ''), lectureId, today, 50, 35, req.user.id]
     );
 
     logAudit(req.user.id, 'lecture_create', { lectureId, title }, req);
@@ -1036,12 +1036,12 @@ app.post('/api/admin/attendance/sessions', authenticateToken, requireAdmin, (req
     if (!title || !title.trim()) return res.status(400).json({ error: 'عنوان الجلسة مطلوب' });
     if (!attendanceDate) return res.status(400).json({ error: 'تاريخ الحضور مطلوب' });
 
-    const bp = parseInt(bonusPoints) || 10;
-    if (bp < 0 || bp > 1000) return res.status(400).json({ error: 'نقاط الحضور يجب أن تكون بين 0 و 1000' });
+    const bp = parseInt(bonusPoints) || 50;
+    if (bp < 0 || bp > 100) return res.status(400).json({ error: 'نقاط الحضور يجب أن تكون بين 0 و 100' });
 
-    // Handle latePoints: if not provided or invalid, default to 5.
-    const lp = latePoints !== undefined ? parseInt(latePoints) : 5;
-    if (lp < 0 || lp > 1000) return res.status(400).json({ error: 'نقاط التأخير يجب أن تكون بين 0 و 1000' });
+    // Handle latePoints: if not provided or invalid, default to 35.
+    const lp = latePoints !== undefined ? parseInt(latePoints) : 35;
+    if (lp < 0 || lp > 100) return res.status(400).json({ error: 'نقاط التأخير يجب أن تكون بين 0 و 100' });
 
     const lid = lectureId ? parseInt(lectureId) : null;
     if (lid) {
@@ -1072,10 +1072,10 @@ app.put('/api/admin/attendance/sessions/:id', authenticateToken, requireAdmin, (
     const { title, description, notes, lectureId, attendanceDate, bonusPoints, latePoints } = req.body;
     if (!title || !title.trim()) return res.status(400).json({ error: 'عنوان الجلسة مطلوب' });
 
-    const bp = parseInt(bonusPoints) || 10;
+    const bp = parseInt(bonusPoints) || 50;
     if (bp < 0 || bp > 1000) return res.status(400).json({ error: 'نقاط الحضور يجب أن تكون بين 0 و 1000' });
 
-    const lp = latePoints !== undefined ? parseInt(latePoints) : 5;
+    const lp = latePoints !== undefined ? parseInt(latePoints) : 35;
     if (lp < 0 || lp > 1000) return res.status(400).json({ error: 'نقاط التأخير يجب أن تكون بين 0 و 1000' });
 
     const lid = lectureId ? parseInt(lectureId) : null;
@@ -1652,7 +1652,7 @@ app.post('/api/admin/import', authenticateToken, requireAdmin, express.json({ li
       for (const as of attSessions) {
         dbRun(
           'INSERT INTO attendance_sessions (id, title, description, notes, lectureId, attendanceDate, bonusPoints, latePoints, isLocked, createdBy, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [as.id, sanitizeBackupString(as.title), sanitizeBackupString(as.description), sanitizeBackupString(as.notes), as.lectureId, as.attendanceDate, as.bonusPoints || 10, as.latePoints || 5, as.isLocked || 0, as.createdBy, as.created_at || new Date().toISOString()]
+          [as.id, sanitizeBackupString(as.title), sanitizeBackupString(as.description), sanitizeBackupString(as.notes), as.lectureId, as.attendanceDate, as.bonusPoints || 50, as.latePoints || 35, as.isLocked || 0, as.createdBy, as.created_at || new Date().toISOString()]
         );
       }
 
@@ -1704,7 +1704,7 @@ app.post('/api/admin/import', authenticateToken, requireAdmin, express.json({ li
         }
         for (const as of rbAttSessions) {
           dbRun('INSERT INTO attendance_sessions (id, title, description, notes, lectureId, attendanceDate, bonusPoints, latePoints, isLocked, createdBy, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [as.id, as.title, as.description, as.notes, as.lectureId, as.attendanceDate, as.bonusPoints || 10, as.latePoints || 5, as.isLocked || 0, as.createdBy, as.created_at]);
+            [as.id, as.title, as.description, as.notes, as.lectureId, as.attendanceDate, as.bonusPoints || 50, as.latePoints || 35, as.isLocked || 0, as.createdBy, as.created_at]);
         }
         for (const ar of rbAttRecords) {
           dbRun('INSERT INTO attendance_records (id, sessionId, studentId, status, awardedPoints, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',

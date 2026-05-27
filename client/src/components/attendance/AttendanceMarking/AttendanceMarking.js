@@ -161,7 +161,7 @@ export default function AttendanceMarking({ sessionId, onBack }) {
         <div className={styles.sessionHeaderMeta}>
           <span className={styles.metaChip}><IconCalendar size={13} /> {session.attendanceDate}</span>
           <span className={styles.metaChip}><IconStudents size={13} /> {students.length} طالب</span>
-          <span className={styles.metaChip}>⭐ حضور: {session.bonusPoints} | تأخير: {session.latePoints !== undefined ? session.latePoints : 5}</span>
+          <span className={styles.metaChip}>⭐ حضور: {session.bonusPoints} | تأخير: {session.latePoints !== undefined ? session.latePoints : 35}</span>
         </div>
         {session.notes && (
           <div className={styles.sessionNotes}>📝 {session.notes}</div>
@@ -247,7 +247,7 @@ export default function AttendanceMarking({ sessionId, onBack }) {
                   </button>
                 </div>
               </div>
-              
+
               {status === 'absent' && (
                 <div style={{ padding: '0 12px 12px', background: 'var(--card-bg)', borderBottom: '1px solid var(--border-color)', borderLeft: '1px solid var(--border-color)', borderRight: '1px solid var(--border-color)', borderBottomLeftRadius: 'var(--radius-md)', borderBottomRightRadius: 'var(--radius-md)', marginTop: '-12px', marginBottom: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>ملاحظة الغياب:</span>
