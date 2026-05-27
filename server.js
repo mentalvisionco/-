@@ -37,7 +37,7 @@ function validateEnv() {
   if (!process.env.GOOGLE_DRIVE_FOLDER_ID) {
     missing.push('GOOGLE_DRIVE_FOLDER_ID');
   }
-  
+
   // Validate Google Drive OAuth2 parameters
   if (process.env.NODE_ENV === 'production') {
     if (!process.env.GOOGLE_CLIENT_ID) {
@@ -55,7 +55,7 @@ function validateEnv() {
       logger.warn('⚠️ Warning: Google Drive OAuth2 environment configuration is incomplete (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN). File uploads will fail.');
     }
   }
-  
+
   if (missing.length > 0) {
     logger.error('❌ FATAL STARTUP ERROR: Missing required environment configuration:');
     missing.forEach(m => logger.error(`   - ${m}`));
@@ -172,7 +172,7 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS 
+const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
   : [];
 
@@ -210,7 +210,7 @@ const uploadLimiter = rateLimit({
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // limit login attempts to 5 per 15 minutes
+  max: 10, // limit login attempts to 10 per 15 minutes
   message: { error: 'محاولات دخول كثيرة جداً، يرجى المحاولة بعد 15 دقيقة' }
 });
 
@@ -238,11 +238,11 @@ app.get('/health', (req, res) => {
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
-  
+
   if (!token) {
     return res.status(401).json({ error: 'غير مصرح لك - يرجى تسجيل الدخول' });
   }
-  
+
   try {
     const user = jwt.verify(token, ACTIVE_SECRET_KEY);
     req.user = user;
@@ -312,7 +312,7 @@ app.post('/api/login', (req, res) => {
     const tokenPayload = { id: user.id, name: user.name, username: user.username, role: user.role };
     // Access token valid for 15 minutes
     const accessToken = jwt.sign(tokenPayload, ACTIVE_SECRET_KEY, { expiresIn: '15m' });
-    
+
     // Refresh token valid for 7 days
     const refreshToken = generateRefreshToken();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -354,8 +354,8 @@ app.post('/api/auth/refresh', (req, res) => {
   if (origin) {
     try {
       const originUrl = new URL(origin, 'http://localhost');
-      const isAllowed = allowedOrigins.includes(originUrl.origin) || 
-                        (process.env.NODE_ENV !== 'production' && originUrl.origin.includes('localhost'));
+      const isAllowed = allowedOrigins.includes(originUrl.origin) ||
+        (process.env.NODE_ENV !== 'production' && originUrl.origin.includes('localhost'));
       if (!isAllowed && originUrl.origin !== `${req.protocol}://${req.get('host')}`) {
         logger.warn(`CSRF Guard: Blocked origin ${originUrl.origin} on token refresh request.`);
         return res.status(400).json({ error: 'طلب غير صالح (CORS/CSRF)' });
@@ -474,7 +474,7 @@ app.put('/api/me/password', authenticateToken, (req, res) => {
 
     const hashedPassword = bcrypt.hashSync(newPassword, 10);
     dbRun('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, req.user.id]);
-    
+
     logAudit(req.user.id, 'password_change_success', null, req);
     res.json({ message: 'تم تغيير كلمة المرور بنجاح' });
   } catch (error) {
@@ -581,10 +581,10 @@ app.post('/api/submissions', authenticateToken, requireStudent, uploadLimiter, (
         }
 
         dbRun(
-          'UPDATE submissions SET fileUrl = ?, uploadedFileId = ?, uploadedFileUrl = ?, uploadedFileName = ?, storageProvider = ? WHERE id = ?', 
+          'UPDATE submissions SET fileUrl = ?, uploadedFileId = ?, uploadedFileUrl = ?, uploadedFileName = ?, storageProvider = ? WHERE id = ?',
           [fileUrl, fileId || (hasFile ? null : existing.uploadedFileId), driveUrl || null, originalName || null, hasFile ? 'google-drive' : null, existing.id]
         );
-        
+
         logAudit(req.user.id, 'submission_update', { taskId, taskTitle: task.title, fileUrl }, req);
         res.json({ message: 'تم تحديث التسليم بنجاح' });
       } else {
@@ -592,7 +592,7 @@ app.post('/api/submissions', authenticateToken, requireStudent, uploadLimiter, (
           'INSERT INTO submissions (userId, taskId, fileUrl, uploadedFileId, uploadedFileUrl, uploadedFileName, storageProvider) VALUES (?, ?, ?, ?, ?, ?, ?)',
           [req.user.id, taskId, fileUrl, fileId, driveUrl, originalName, hasFile ? 'google-drive' : null]
         );
-        
+
         logAudit(req.user.id, 'submission_create', { taskId, taskTitle: task.title, fileUrl }, req);
         res.status(201).json({ message: 'تم تسليم المهمة بنجاح، في انتظار تقييم المعلم' });
       }
@@ -703,7 +703,7 @@ app.put('/api/admin/submissions/:id/grade', authenticateToken, requireAdmin, (re
       const oldGrade = sub.grade || 0;
       let newPoints = student.points - oldGrade + newGrade;
       if (newPoints < 0) newPoints = 0;
-      
+
       dbRun('UPDATE users SET points = ? WHERE id = ?', [newPoints, sub.userId]);
     }
 
@@ -759,7 +759,7 @@ app.delete('/api/admin/students/:id', authenticateToken, requireAdmin, (req, res
   try {
     const student = dbGet('SELECT id, name, username FROM users WHERE id = ? AND role = ?', [req.params.id, 'student']);
     if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
-    
+
     // Submissions, ratings, and attendance are cascade deleted due to FOREIGN KEY ON DELETE CASCADE
     // However, SQLite FOREIGN KEY support needs to be enabled for it to work. 
     // It is enabled in database.js, but let's be explicit just in case.
@@ -767,7 +767,7 @@ app.delete('/api/admin/students/:id', authenticateToken, requireAdmin, (req, res
     dbRun('DELETE FROM submissions WHERE userId = ?', [req.params.id]);
     dbRun('DELETE FROM ratings WHERE userId = ?', [req.params.id]);
     dbRun('DELETE FROM users WHERE id = ?', [req.params.id]);
-    
+
     logAudit(req.user.id, 'student_delete', { studentId: req.params.id, username: student.username, name: student.name }, req);
     res.json({ message: 'تم حذف الطالب بنجاح' });
   } catch (error) {
@@ -794,7 +794,7 @@ app.post('/api/admin/students', authenticateToken, requireAdmin, (req, res) => {
 
     dbRun('INSERT INTO users (name, username, password, role, points) VALUES (?, ?, ?, ?, ?)',
       [cleanName, cleanUsername, hashedPassword, 'student', p]);
-    
+
     logAudit(req.user.id, 'student_create', { username: cleanUsername, name: cleanName, points: p }, req);
     res.json({ message: 'تم إضافة الطالب بنجاح' });
   } catch (err) {
@@ -829,7 +829,7 @@ app.put('/api/admin/students/:id', authenticateToken, requireAdmin, (req, res) =
       dbRun('UPDATE users SET name = ?, username = ?, points = ? WHERE id = ?',
         [cleanName, cleanUsername, p, req.params.id]);
     }
-    
+
     logAudit(req.user.id, 'student_update', { studentId: req.params.id, username: cleanUsername, name: cleanName, points: p }, req);
     res.json({ message: 'تم التعديل بنجاح' });
   } catch (err) {
@@ -842,11 +842,11 @@ app.post('/api/admin/lectures', authenticateToken, requireAdmin, (req, res) => {
   try {
     const { title, description, materialUrl } = req.body;
     if (!title || !materialUrl) return res.status(400).json({ error: 'العنوان ورابط الماتيريال مطلوبان' });
-    
+
     const count = dbGet('SELECT COUNT(*) as c FROM lectures').c || 0;
-    const result = dbRun('INSERT INTO lectures (title, description, materialUrl, orderNum) VALUES (?, ?, ?, ?)', 
+    const result = dbRun('INSERT INTO lectures (title, description, materialUrl, orderNum) VALUES (?, ?, ?, ?)',
       [sanitize(title), sanitize(description), sanitize(materialUrl), count + 1]);
-    
+
     // Auto-create attendance session linked to this lecture
     const lectureId = result.lastInsertRowid;
     const today = new Date().toISOString().split('T')[0];
@@ -854,7 +854,7 @@ app.post('/api/admin/lectures', authenticateToken, requireAdmin, (req, res) => {
       'INSERT INTO attendance_sessions (title, description, lectureId, attendanceDate, bonusPoints, latePoints, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [sanitize(title), sanitize(description || ''), lectureId, today, 10, 5, req.user.id]
     );
-    
+
     logAudit(req.user.id, 'lecture_create', { lectureId, title }, req);
     res.json({ message: 'تمت إضافة المحاضرة وجلسة الحضور بنجاح' });
   } catch (err) {
@@ -868,7 +868,7 @@ app.put('/api/admin/lectures/:id', authenticateToken, requireAdmin, (req, res) =
     const { title, description, materialUrl } = req.body;
     dbRun('UPDATE lectures SET title = ?, description = ?, materialUrl = ? WHERE id = ?',
       [sanitize(title), sanitize(description), sanitize(materialUrl), req.params.id]);
-    
+
     logAudit(req.user.id, 'lecture_update', { lectureId: req.params.id, title }, req);
     res.json({ message: 'تم التعديل بنجاح' });
   } catch (err) {
@@ -881,10 +881,10 @@ app.delete('/api/admin/lectures/:id', authenticateToken, requireAdmin, (req, res
   try {
     const lecture = dbGet('SELECT id, title FROM lectures WHERE id = ?', [req.params.id]);
     if (!lecture) return res.status(404).json({ error: 'المحاضرة غير موجودة' });
-    
+
     dbRun('DELETE FROM ratings WHERE lectureId = ?', [req.params.id]);
     dbRun('DELETE FROM lectures WHERE id = ?', [req.params.id]);
-    
+
     logAudit(req.user.id, 'lecture_delete', { lectureId: req.params.id, title: lecture.title }, req);
     res.json({ message: 'تم حذف المحاضرة بنجاح' });
   } catch (err) {
@@ -899,14 +899,14 @@ app.post('/api/lectures/:id/rate', authenticateToken, requireStudent, (req, res)
     const comment = req.body.comment ? sanitize(req.body.comment) : null;
     const lectureId = req.params.id;
     if (rating < 1 || rating > 5) return res.status(400).json({ error: 'التقييم يجب أن يكون من 1 لـ 5' });
-    
+
     const existing = dbGet('SELECT id FROM ratings WHERE userId = ? AND lectureId = ?', [req.user.id, lectureId]);
     if (existing) {
       dbRun('UPDATE ratings SET rating = ?, comment = ? WHERE id = ?', [rating, comment, existing.id]);
     } else {
       dbRun('INSERT INTO ratings (userId, lectureId, rating, comment) VALUES (?, ?, ?, ?)', [req.user.id, lectureId, rating, comment]);
     }
-    
+
     logAudit(req.user.id, 'lecture_rate', { lectureId, rating }, req);
     res.json({ message: 'تم حفظ التقييم' });
   } catch (err) {
@@ -958,10 +958,10 @@ app.post('/api/admin/tasks', authenticateToken, requireAdmin, (req, res) => {
   try {
     const { title, description, taskUrl } = req.body;
     if (!title || !taskUrl) return res.status(400).json({ error: 'العنوان ورابط المهمة مطلوبان' });
-    
-    const result = dbRun('INSERT INTO tasks (title, description, taskUrl) VALUES (?, ?, ?)', 
+
+    const result = dbRun('INSERT INTO tasks (title, description, taskUrl) VALUES (?, ?, ?)',
       [sanitize(title), sanitize(description), sanitize(taskUrl)]);
-    
+
     logAudit(req.user.id, 'task_create', { taskId: result.lastInsertRowid, title }, req);
     res.json({ message: 'تمت إضافة المهمة بنجاح' });
   } catch (err) {
@@ -975,7 +975,7 @@ app.put('/api/admin/tasks/:id', authenticateToken, requireAdmin, (req, res) => {
     const { title, description, taskUrl } = req.body;
     dbRun('UPDATE tasks SET title = ?, description = ?, taskUrl = ? WHERE id = ?',
       [sanitize(title), sanitize(description), sanitize(taskUrl), req.params.id]);
-    
+
     logAudit(req.user.id, 'task_update', { taskId: req.params.id, title }, req);
     res.json({ message: 'تم التعديل بنجاح' });
   } catch (err) {
@@ -988,10 +988,10 @@ app.delete('/api/admin/tasks/:id', authenticateToken, requireAdmin, (req, res) =
   try {
     const task = dbGet('SELECT id, title FROM tasks WHERE id = ?', [req.params.id]);
     if (!task) return res.status(404).json({ error: 'المهمة غير موجودة' });
-    
+
     dbRun('DELETE FROM submissions WHERE taskId = ?', [req.params.id]);
     dbRun('DELETE FROM tasks WHERE id = ?', [req.params.id]);
-    
+
     logAudit(req.user.id, 'task_delete', { taskId: req.params.id, title: task.title }, req);
     res.json({ message: 'تم حذف المهمة بنجاح' });
   } catch (err) {
@@ -1133,7 +1133,7 @@ app.delete('/api/admin/attendance/sessions/:id', authenticateToken, requireAdmin
 
     // CASCADE will delete attendance_records
     dbRun('DELETE FROM attendance_sessions WHERE id = ?', [req.params.id]);
-    
+
     logAudit(req.user.id, 'attendance_session_delete', { sessionId: req.params.id, title: session.title }, req);
     res.json({ message: 'تم حذف الجلسة واستعادة النقاط بنجاح' });
   } catch (error) {
@@ -1892,7 +1892,7 @@ app.use((req, res) => {
     // Smart fallback: try to serve the base path HTML file to avoid hydration mismatch
     const baseSegment = req.path.split('/')[1];
     const possibleFile = path.join(__dirname, 'client', 'out', `${baseSegment}.html`);
-    
+
     if (baseSegment && fs.existsSync(possibleFile)) {
       res.sendFile(possibleFile);
     } else {
