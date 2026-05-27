@@ -1039,7 +1039,7 @@ app.post('/api/admin/attendance/sessions', authenticateToken, requireAdmin, (req
     const bp = parseInt(bonusPoints) || 50;
     if (bp < 0 || bp > 100) return res.status(400).json({ error: 'نقاط الحضور يجب أن تكون بين 0 و 100' });
 
-    // Handle latePoints: if not provided or invalid, default to 35.
+    // Handle latePoints: if not provided or invalid, default to 35 .
     const lp = latePoints !== undefined ? parseInt(latePoints) : 35;
     if (lp < 0 || lp > 100) return res.status(400).json({ error: 'نقاط التأخير يجب أن تكون بين 0 و 100' });
 
