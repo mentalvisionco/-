@@ -86,6 +86,7 @@ const ALLOWED_MIME_TYPES = [
   'image/jpg',
   'application/zip',
   'application/x-zip-compressed',
+  'application/octet-stream', // Generic binary stream (fallback for PSD/ZIP/AI/PSB on some browsers/OS)
   // Photoshop MIME types
   'image/vnd.adobe.photoshop',
   'image/psd',
