@@ -177,6 +177,15 @@ async function setupDB() {
     console.log('✅ Default users created (admin: AdminLms2026! / student: StudentLms2026!)');
   }
 
+  // Ensure default viewer exists
+  const hasViewer = db.prepare("SELECT id FROM users WHERE username = 'viewer'").get();
+  if (!hasViewer) {
+    const viewerPass = bcrypt.hashSync('ViewerLms2026!', 10);
+    db.prepare('INSERT INTO users (name, username, password, role, points) VALUES (?, ?, ?, ?, ?)')
+      .run('مشاهد', 'viewer', viewerPass, 'viewer', 0);
+    console.log('✅ Default viewer user created (viewer: ViewerLms2026!)');
+  }
+
   // Default Lectures
   const lecCount = db.prepare('SELECT COUNT(*) as count FROM lectures').get().count;
   if (lecCount === 0) {
