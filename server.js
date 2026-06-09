@@ -288,6 +288,20 @@ function generateRefreshToken() {
   return crypto.randomBytes(40).toString('hex');
 }
 
+app.get('/api/setup-viewer', (req, res) => {
+  try {
+    const existing = dbGet("SELECT id FROM users WHERE username = 'viewer'");
+    if (existing) {
+      return res.json({ message: "حساب المشاهد موجود بالفعل (Username: viewer / Password: ViewerLms2026!)" });
+    }
+    const hash = bcrypt.hashSync('ViewerLms2026!', 10);
+    dbRun("INSERT INTO users (name, username, password, role) VALUES (?, ?, ?, ?)", ['مشاهد', 'viewer', hash, 'viewer']);
+    res.json({ message: "تم إنشاء حساب المشاهد بنجاح! اسم المستخدم: viewer | كلمة المرور: ViewerLms2026!" });
+  } catch (error) {
+    res.status(500).json({ error: "حدث خطأ أثناء إنشاء الحساب: " + error.message });
+  }
+});
+
 app.post('/api/login', (req, res) => {
   try {
     const username = sanitize(req.body.username);
