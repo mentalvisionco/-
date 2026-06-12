@@ -163,6 +163,20 @@ async function setupDB() {
     console.log('✅ Added storageProvider column to submissions');
   } catch (err) {}
 
+  // Migrate existing database to add new feedbackFile columns if they do not exist
+  try {
+    db.exec('ALTER TABLE submissions ADD COLUMN feedbackFileId TEXT');
+    console.log('✅ Added feedbackFileId column to submissions');
+  } catch (err) {}
+  try {
+    db.exec('ALTER TABLE submissions ADD COLUMN feedbackFileUrl TEXT');
+    console.log('✅ Added feedbackFileUrl column to submissions');
+  } catch (err) {}
+  try {
+    db.exec('ALTER TABLE submissions ADD COLUMN feedbackFileName TEXT');
+    console.log('✅ Added feedbackFileName column to submissions');
+  } catch (err) {}
+
   // Default Users
   const count = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
   

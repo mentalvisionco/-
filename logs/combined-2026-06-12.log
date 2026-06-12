@@ -1,0 +1,6 @@
+{"level":"info","message":"Database connected successfully!","service":"lms-platform","timestamp":"2026-06-12 11:33:10"}
+{"level":"info","message":"[Backup] Starting automatic database backup...","service":"lms-platform","timestamp":"2026-06-12 11:33:11"}
+{"level":"info","message":"Server running perfectly on port 5000!","service":"lms-platform","timestamp":"2026-06-12 11:33:11"}
+{"level":"info","message":"Main Website: http://localhost:5000","service":"lms-platform","timestamp":"2026-06-12 11:33:12"}
+{"level":"info","message":"Health check: http://localhost:5000/health","service":"lms-platform","timestamp":"2026-06-12 11:33:12"}
+{"level":"info","message":"[Backup] Database backup completed successfully: auto-backup-2026-06-12T08-33-11-174Z.db","service":"lms-platform","timestamp":"2026-06-12 11:33:12"}

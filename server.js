@@ -190,6 +190,14 @@ app.use(cors({
 
 app.use(cookieParser());
 app.use(express.json({ limit: '1mb' }));
+
+// Ensure uploads folder exists and serve it statically
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
+
 app.use(express.static(path.join(__dirname, 'client', 'out'), { extensions: ['html'] }));
 
 // ==============================
@@ -637,7 +645,7 @@ app.delete('/api/submissions/:taskId', authenticateToken, requireStudent, async 
 
     const task = dbGet('SELECT title FROM tasks WHERE id = ?', [taskId]);
     const existing = dbGet(
-      'SELECT id, grade, uploadedFileId FROM submissions WHERE userId = ? AND taskId = ?',
+      'SELECT id, grade, uploadedFileId, feedbackFileId FROM submissions WHERE userId = ? AND taskId = ?',
       [req.user.id, taskId]
     );
 
@@ -651,6 +659,18 @@ app.delete('/api/submissions/:taskId', authenticateToken, requireStudent, async 
         await deleteFile(existing.uploadedFileId);
       } catch (deleteError) {
         logger.warn('Failed to delete file from Drive on submission delete: %s', deleteError.message);
+      }
+    }
+
+    // Clean up local teacher feedback file if exists
+    if (existing.feedbackFileId) {
+      const oldFilePath = path.join(uploadsDir, existing.feedbackFileId);
+      if (fs.existsSync(oldFilePath)) {
+        try {
+          fs.unlinkSync(oldFilePath);
+        } catch (err) {
+          logger.warn('Failed to delete local feedback file on submission delete: %s', err.message);
+        }
       }
     }
 
@@ -703,33 +723,111 @@ app.get('/api/admin/submissions', authenticateToken, requireViewerOrAdmin, (req,
 });
 
 app.put('/api/admin/submissions/:id/grade', authenticateToken, requireAdmin, (req, res) => {
-  try {
-    const { grade } = req.body;
-    const newGrade = parseInt(grade);
-    if (isNaN(newGrade) || newGrade < 0 || newGrade > 50) {
-      return res.status(400).json({ error: 'التقييم يجب أن يكون بين 0 و 50' });
+  uploadSingle(req, res, async function (err) {
+    if (err) {
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ error: 'حجم الملف كبير جداً. الحد الأقصى هو 500 ميجابايت' });
+        }
+        return res.status(400).json({ error: `خطأ في تحميل الملف: ${err.message}` });
+      }
+      return res.status(400).json({ error: err.message });
     }
 
-    const sub = dbGet('SELECT * FROM submissions WHERE id = ?', [req.params.id]);
-    if (!sub) return res.status(404).json({ error: 'التسليم غير موجود' });
+    try {
+      const { grade, feedback, deleteFeedbackFile } = req.body;
+      const newGrade = parseInt(grade);
+      if (isNaN(newGrade) || newGrade < 0 || newGrade > 50) {
+        return res.status(400).json({ error: 'التقييم يجب أن يكون بين 0 و 50' });
+      }
 
-    const student = dbGet('SELECT points FROM users WHERE id = ?', [sub.userId]);
-    if (student) {
-      const oldGrade = sub.grade || 0;
-      let newPoints = student.points - oldGrade + newGrade;
-      if (newPoints < 0) newPoints = 0;
+      const sub = dbGet('SELECT * FROM submissions WHERE id = ?', [req.params.id]);
+      if (!sub) return res.status(404).json({ error: 'التسليم غير موجود' });
 
-      dbRun('UPDATE users SET points = ? WHERE id = ?', [newPoints, sub.userId]);
+      const student = dbGet('SELECT points FROM users WHERE id = ?', [sub.userId]);
+      if (student) {
+        const oldGrade = sub.grade || 0;
+        let newPoints = student.points - oldGrade + newGrade;
+        if (newPoints < 0) newPoints = 0;
+
+        dbRun('UPDATE users SET points = ? WHERE id = ?', [newPoints, sub.userId]);
+      }
+
+      const cleanFeedback = feedback ? sanitize(feedback) : null;
+
+      // Handle feedback file uploads locally
+      let fileId = sub.feedbackFileId;
+      let driveUrl = sub.feedbackFileUrl;
+      let originalName = sub.feedbackFileName;
+
+      if (req.file) {
+        // Delete old local file if exists
+        if (sub.feedbackFileId) {
+          const oldFilePath = path.join(uploadsDir, sub.feedbackFileId);
+          if (fs.existsSync(oldFilePath)) {
+            try {
+              fs.unlinkSync(oldFilePath);
+            } catch (err) {
+              logger.warn('Failed to delete old local feedback file: %s', err.message);
+            }
+          }
+        }
+
+        // Save new file locally
+        const fileExt = path.extname(req.file.originalname).toLowerCase();
+        const uniqueFilename = `feedback-${req.params.id}-${Date.now()}${fileExt}`;
+        const filePath = path.join(uploadsDir, uniqueFilename);
+        fs.writeFileSync(filePath, req.file.buffer);
+
+        // Build URL dynamically
+        const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+        const host = req.get('host');
+        
+        fileId = uniqueFilename;
+        driveUrl = `${protocol}://${host}/uploads/${uniqueFilename}`;
+        originalName = req.file.originalname;
+      } else if (deleteFeedbackFile === 'true') {
+        // Delete old local file
+        if (sub.feedbackFileId) {
+          const oldFilePath = path.join(uploadsDir, sub.feedbackFileId);
+          if (fs.existsSync(oldFilePath)) {
+            try {
+              fs.unlinkSync(oldFilePath);
+            } catch (err) {
+              logger.warn('Failed to delete local feedback file: %s', err.message);
+            }
+          }
+        }
+        fileId = null;
+        driveUrl = null;
+        originalName = null;
+      }
+
+      dbRun(
+        'UPDATE submissions SET grade = ?, feedback = ?, feedbackFileId = ?, feedbackFileUrl = ?, feedbackFileName = ? WHERE id = ?',
+        [newGrade, cleanFeedback, fileId, driveUrl, originalName, req.params.id]
+      );
+
+      logAudit(req.user.id, 'grade_submission', { 
+        submissionId: req.params.id, 
+        grade: newGrade, 
+        studentId: sub.userId,
+        hasFeedback: !!cleanFeedback,
+        hasFile: !!fileId
+      }, req);
+
+      res.json({ 
+        message: 'تم التقييم بنجاح', 
+        grade: newGrade, 
+        feedback: cleanFeedback,
+        feedbackFileUrl: driveUrl,
+        feedbackFileName: originalName
+      });
+    } catch (error) {
+      logger.error('Grade error: %s', error.stack);
+      res.status(500).json({ error: 'حدث خطأ أثناء التقييم' });
     }
-
-    dbRun('UPDATE submissions SET grade = ? WHERE id = ?', [newGrade, req.params.id]);
-    logAudit(req.user.id, 'grade_submission', { submissionId: req.params.id, grade: newGrade, studentId: sub.userId }, req);
-
-    res.json({ message: 'تم التقييم بنجاح', grade: newGrade });
-  } catch (error) {
-    logger.error('Grade error: %s', error.stack);
-    res.status(500).json({ error: 'حدث خطأ أثناء التقييم' });
-  }
+  });
 });
 
 app.get('/api/admin/students', authenticateToken, requireViewerOrAdmin, (req, res) => {
@@ -775,9 +873,21 @@ app.delete('/api/admin/students/:id', authenticateToken, requireAdmin, (req, res
     const student = dbGet('SELECT id, name, username FROM users WHERE id = ? AND role = ?', [req.params.id, 'student']);
     if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
 
-    // Submissions, ratings, and attendance are cascade deleted due to FOREIGN KEY ON DELETE CASCADE
-    // However, SQLite FOREIGN KEY support needs to be enabled for it to work. 
-    // It is enabled in database.js, but let's be explicit just in case.
+    // Clean up local teacher feedback files for all submissions of this student
+    const studentSubs = dbAll('SELECT feedbackFileId FROM submissions WHERE userId = ?', [req.params.id]);
+    for (const sub of studentSubs) {
+      if (sub.feedbackFileId) {
+        const oldFilePath = path.join(uploadsDir, sub.feedbackFileId);
+        if (fs.existsSync(oldFilePath)) {
+          try {
+            fs.unlinkSync(oldFilePath);
+          } catch (err) {
+            logger.warn('Failed to delete local feedback file: %s', err.message);
+          }
+        }
+      }
+    }
+
     dbRun('DELETE FROM attendance_records WHERE studentId = ?', [req.params.id]);
     dbRun('DELETE FROM submissions WHERE userId = ?', [req.params.id]);
     dbRun('DELETE FROM ratings WHERE userId = ?', [req.params.id]);
@@ -1003,6 +1113,21 @@ app.delete('/api/admin/tasks/:id', authenticateToken, requireAdmin, (req, res) =
   try {
     const task = dbGet('SELECT id, title FROM tasks WHERE id = ?', [req.params.id]);
     if (!task) return res.status(404).json({ error: 'المهمة غير موجودة' });
+
+    // Clean up local teacher feedback files for all submissions of this task
+    const taskSubs = dbAll('SELECT feedbackFileId FROM submissions WHERE taskId = ?', [req.params.id]);
+    for (const sub of taskSubs) {
+      if (sub.feedbackFileId) {
+        const oldFilePath = path.join(uploadsDir, sub.feedbackFileId);
+        if (fs.existsSync(oldFilePath)) {
+          try {
+            fs.unlinkSync(oldFilePath);
+          } catch (err) {
+            logger.warn('Failed to delete local feedback file: %s', err.message);
+          }
+        }
+      }
+    }
 
     dbRun('DELETE FROM submissions WHERE taskId = ?', [req.params.id]);
     dbRun('DELETE FROM tasks WHERE id = ?', [req.params.id]);
@@ -1652,8 +1777,14 @@ app.post('/api/admin/import', authenticateToken, requireAdmin, express.json({ li
 
       for (const s of submissions) {
         dbRun(
-          'INSERT INTO submissions (id, userId, taskId, fileUrl, uploadedFileId, uploadedFileUrl, uploadedFileName, storageProvider, grade, feedback, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [s.id, s.userId, s.taskId, sanitizeBackupString(s.fileUrl), s.uploadedFileId || null, s.uploadedFileUrl || null, s.uploadedFileName || null, s.storageProvider || null, s.grade || null, sanitizeBackupString(s.feedback), s.created_at || new Date().toISOString()]
+          'INSERT INTO submissions (id, userId, taskId, fileUrl, uploadedFileId, uploadedFileUrl, uploadedFileName, storageProvider, grade, feedback, feedbackFileId, feedbackFileUrl, feedbackFileName, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            s.id, s.userId, s.taskId, sanitizeBackupString(s.fileUrl), 
+            s.uploadedFileId || null, s.uploadedFileUrl || null, s.uploadedFileName || null, s.storageProvider || null, 
+            s.grade || null, sanitizeBackupString(s.feedback),
+            s.feedbackFileId || null, s.feedbackFileUrl || null, s.feedbackFileName || null,
+            s.created_at || new Date().toISOString()
+          ]
         );
       }
 
@@ -1710,8 +1841,14 @@ app.post('/api/admin/import', authenticateToken, requireAdmin, express.json({ li
             [t.id, t.title, t.description, t.taskUrl, t.created_at]);
         }
         for (const s of submissions) {
-          dbRun('INSERT INTO submissions (id, userId, taskId, fileUrl, uploadedFileId, uploadedFileUrl, uploadedFileName, storageProvider, grade, feedback, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [s.id, s.userId, s.taskId, s.fileUrl, s.uploadedFileId || null, s.uploadedFileUrl || null, s.uploadedFileName || null, s.storageProvider || null, s.grade || null, s.feedback, s.created_at]);
+          dbRun('INSERT INTO submissions (id, userId, taskId, fileUrl, uploadedFileId, uploadedFileUrl, uploadedFileName, storageProvider, grade, feedback, feedbackFileId, feedbackFileUrl, feedbackFileName, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [
+              s.id, s.userId, s.taskId, s.fileUrl, 
+              s.uploadedFileId || null, s.uploadedFileUrl || null, s.uploadedFileName || null, s.storageProvider || null, 
+              s.grade || null, s.feedback, 
+              s.feedbackFileId || null, s.feedbackFileUrl || null, s.feedbackFileName || null, 
+              s.created_at
+            ]);
         }
         for (const r of ratings) {
           dbRun('INSERT INTO ratings (id, userId, lectureId, rating, comment, created_at) VALUES (?, ?, ?, ?, ?, ?)',

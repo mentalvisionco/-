@@ -20,7 +20,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog/ConfirmDialog';
 import BackupPanel from '@/components/backup/BackupPanel/BackupPanel';
 import AttendancePanel from '@/components/attendance/AttendancePanel/AttendancePanel';
 import { SkeletonCard, SkeletonList, SkeletonTable } from '@/components/ui/Skeleton/Skeleton';
-import { IconDashboard, IconStudents, IconLectures, IconTasksAlt, IconPlus, IconEdit, IconTrash, IconSearch, IconExternalLink, IconStarFilled, IconEye, IconBarChart, IconFileText, IconSettings, IconClipboardCheck } from '@/components/icons';
+import { IconDashboard, IconStudents, IconLectures, IconTasksAlt, IconPlus, IconEdit, IconTrash, IconSearch, IconExternalLink, IconStarFilled, IconEye, IconBarChart, IconFileText, IconSettings, IconClipboardCheck, IconUpload } from '@/components/icons';
 import Image from 'next/image';
 import styles from './page.module.css';
 
@@ -204,13 +204,14 @@ export default function AdminDashboard() {
   };
 
   // ——— Submissions handler ———
-  const handleGradeSubmission = async (subId, grade) => {
+  const handleGradeSubmission = async (subId, formData) => {
     try {
-      await apiCall(`/admin/submissions/${subId}/grade`, 'PUT', { grade });
+      await apiCall(`/admin/submissions/${subId}/grade`, 'PUT', formData);
       toast.success('تم تقييم التسليم بنجاح');
       fetchData();
     } catch (err) {
       toast.error(err.message);
+      throw err;
     }
   };
 
@@ -477,43 +478,7 @@ export default function AdminDashboard() {
                 <EmptyState icon={IconFileText} title="لا توجد تسليمات" description="لم يقم أي طالب بالتسليم بعد." />
               ) : (
                 submissions.map(sub => (
-                  <Card key={sub.id} padding="sm" className={styles.adminListItem}>
-                    <div className={styles.adminItemInfo}>
-                      <h4>{sub.studentName}</h4>
-                      <p>{sub.taskTitle}</p>
-                      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '8px' }}>
-                        {sub.fileUrl && sub.fileUrl.startsWith('http') && (
-                          <a href={sub.fileUrl} target="_blank" rel="noopener noreferrer" className={styles.taskLink}>
-                            <IconExternalLink size={13} /> عرض الرابط الخارجي
-                          </a>
-                        )}
-                        {sub.uploadedFileUrl && (
-                          <a href={sub.uploadedFileUrl} target="_blank" rel="noopener noreferrer" className={styles.taskLink} style={{ color: 'var(--green)' }}>
-                            <IconExternalLink size={13} /> عرض الملف المرفوع ({sub.uploadedFileName || 'ملف'})
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                    <div className={styles.adminItemActions} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <Input
-                        type="number"
-                        placeholder="الدرجة من 50"
-                        min="0"
-                        max="50"
-                        defaultValue={sub.grade ?? ''}
-                        onBlur={(e) => {
-                          const val = parseInt(e.target.value);
-                          if (!isNaN(val) && val !== sub.grade) {
-                            handleGradeSubmission(sub.id, val);
-                          }
-                        }}
-                        style={{ width: '120px' }}
-                      />
-                      <Badge variant={sub.grade !== null ? 'success' : 'warning'}>
-                        {sub.grade !== null ? `تم التقييم: ${sub.grade}/50` : 'بانتظار التقييم'}
-                      </Badge>
-                    </div>
-                  </Card>
+                  <SubmissionItem key={sub.id} sub={sub} onGrade={handleGradeSubmission} />
                 ))
               )}
             </div>
@@ -533,5 +498,219 @@ export default function AdminDashboard() {
       <RatingsModal isOpen={showRatingsModal} onClose={() => setShowRatingsModal(false)} title={ratingsLectureTitle} ratings={lectureRatings} />
       <ConfirmDialog isOpen={confirmState.open} onClose={() => setConfirmState(s => ({ ...s, open: false }))} onConfirm={confirmState.onConfirm} title={confirmState.title} message={confirmState.message} />
     </DashboardLayout>
+  );
+}
+
+function SubmissionItem({ sub, onGrade }) {
+  const [grade, setGrade] = useState(sub.grade ?? '');
+  const [feedback, setFeedback] = useState(sub.feedback ?? '');
+  const [file, setFile] = useState(null);
+  const [deleteFileFlag, setDeleteFileFlag] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const hasExistingFile = !!sub.feedbackFileUrl && !deleteFileFlag;
+  const isChanged = 
+    grade !== (sub.grade ?? '') || 
+    feedback !== (sub.feedback ?? '') || 
+    file !== null || 
+    deleteFileFlag;
+
+  const handleSave = async () => {
+    const parsedGrade = parseInt(grade);
+    if (isNaN(parsedGrade) || parsedGrade < 0 || parsedGrade > 50) {
+      alert('التقييم يجب أن يكون بين 0 و 50');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const formData = new FormData();
+      formData.append('grade', parsedGrade);
+      formData.append('feedback', feedback);
+      if (file) {
+        formData.append('file', file);
+      }
+      if (deleteFileFlag) {
+        formData.append('deleteFeedbackFile', 'true');
+      }
+
+      await onGrade(sub.id, formData);
+      setFile(null);
+      setDeleteFileFlag(false);
+    } catch (err) {
+      // error is already handled
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card padding="sm" className={styles.adminListItem}>
+      <div className={styles.adminItemInfo}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+          <strong style={{ fontSize: '16px', color: 'var(--text-primary)' }}>{sub.studentName}</strong>
+          <Badge variant={sub.grade !== null ? 'success' : 'warning'}>
+            {sub.grade !== null ? `تم التقييم: ${sub.grade}/50` : 'بانتظار التقييم'}
+          </Badge>
+        </div>
+        <p style={{ margin: '4px 0', color: 'var(--text-secondary)', fontSize: '14px' }}>{sub.taskTitle}</p>
+        
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '12px' }}>
+          {sub.fileUrl && sub.fileUrl.startsWith('http') && (
+            <a href={sub.fileUrl} target="_blank" rel="noopener noreferrer" className={styles.taskLink} style={{ margin: 0, padding: '4px 8px', fontSize: '13px' }}>
+              <IconExternalLink size={13} /> عرض الرابط الخارجي
+            </a>
+          )}
+          {sub.uploadedFileUrl && (
+            <a href={sub.uploadedFileUrl} target="_blank" rel="noopener noreferrer" className={styles.taskLink} style={{ color: 'var(--green)', margin: 0, padding: '4px 8px', fontSize: '13px' }}>
+              <IconExternalLink size={13} /> عرض الملف المرفوع ({sub.uploadedFileName || 'ملف'})
+            </a>
+          )}
+        </div>
+
+        {/* Existing Feedback File Section */}
+        {hasExistingFile && (
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginTop: '12px',
+            padding: '6px 12px',
+            background: 'var(--surface-2)',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-subtle)',
+            fontSize: '13px'
+          }}>
+            <span style={{ color: 'var(--text-tertiary)' }}>المرفق الحالي:</span>
+            <a href={sub.feedbackFileUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-text)', textDecoration: 'underline', fontWeight: '500' }}>
+              {sub.feedbackFileName || 'صورة التوضيح'}
+            </a>
+            <button 
+              type="button" 
+              onClick={() => setDeleteFileFlag(true)} 
+              title="حذف الملف المرفق" 
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--red)',
+                cursor: 'pointer',
+                padding: '2px',
+                display: 'inline-flex',
+                alignItems: 'center'
+              }}
+            >
+              <IconTrash size={14} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className={styles.adminItemActions} style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+        alignItems: 'flex-start',
+        background: 'var(--surface-2)',
+        padding: '16px',
+        borderRadius: 'var(--radius-md)',
+        border: '1px solid var(--border-subtle)',
+        width: '100%',
+        maxWidth: '480px',
+        marginTop: '8px'
+      }}>
+        <div style={{ display: 'flex', gap: '12px', width: '100%', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1', minWidth: '100px' }}>
+            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>الدرجة من 50</label>
+            <Input
+              type="number"
+              placeholder="الدرجة"
+              min="0"
+              max="50"
+              value={grade}
+              onChange={(e) => setGrade(e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+          
+          <div style={{ flex: '2', minWidth: '200px' }}>
+            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>ملاحظات للطالب</label>
+            <Input
+              type="text"
+              placeholder="اكتب ملاحظات المعلم هنا..."
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '12px' }}>
+          {/* File Upload Input */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input
+              type="file"
+              id={`feedback-file-${sub.id}`}
+              onChange={(e) => {
+                setFile(e.target.files[0] || null);
+                if (e.target.files[0]) {
+                  setDeleteFileFlag(false);
+                }
+              }}
+              style={{ display: 'none' }}
+              accept="image/*,.pdf"
+            />
+            <label
+              htmlFor={`feedback-file-${sub.id}`}
+              style={{
+                cursor: 'pointer',
+                border: '1px solid var(--border-default)',
+                background: 'var(--surface-1)',
+                padding: '6px 12px',
+                borderRadius: 'var(--radius-sm)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '13px',
+                fontWeight: '500'
+              }}
+            >
+              <IconUpload size={14} />
+              <span>{file ? 'تغيير الصورة' : 'إرفاق صورة...'}</span>
+            </label>
+            {file && (
+              <span style={{ fontSize: '12px', color: 'var(--text-primary)', maxWidth: '120px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={file.name}>
+                {file.name}
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {isChanged && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setGrade(sub.grade ?? '');
+                  setFeedback(sub.feedback ?? '');
+                  setFile(null);
+                  setDeleteFileFlag(false);
+                }}
+                disabled={saving}
+              >
+                إلغاء
+              </Button>
+            )}
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={!isChanged || saving}
+              onClick={handleSave}
+            >
+              {saving ? 'جاري الحفظ...' : 'حفظ التقييم'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }

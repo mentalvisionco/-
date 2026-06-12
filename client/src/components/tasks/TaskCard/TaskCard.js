@@ -119,6 +119,48 @@ export default function TaskCard({ task, submission, onSubmit, onCancel }) {
               </a>
             </div>
           )}
+
+          {/* Teacher Feedback / Notes & Image Section */}
+          {(submission.feedback || submission.feedbackFileUrl) && (
+            <div style={{
+              marginTop: '12px',
+              padding: '16px',
+              background: 'var(--accent-muted)',
+              borderRadius: 'var(--radius-md)',
+              borderRight: '4px solid var(--accent)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px'
+            }}>
+              {submission.feedback && (
+                <div>
+                  <strong style={{ display: 'block', color: 'var(--accent-text)', marginBottom: '4px', fontSize: '14px' }}>ملاحظات المعلم:</strong>
+                  <p style={{ margin: 0, color: 'var(--text-primary)', fontSize: '13.5px', lineHeight: '1.6' }}>{submission.feedback}</p>
+                </div>
+              )}
+              {submission.feedbackFileUrl && (
+                <div style={{ marginTop: submission.feedback ? '4px' : '0' }}>
+                  <span style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '8px', fontWeight: '500' }}>الصورة التوضيحية المرفقة من المعلم:</span>
+                  <a href={submission.feedbackFileUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', maxWidth: '100%' }}>
+                    <img 
+                      src={submission.feedbackFileUrl} 
+                      alt="توضيح المعلم" 
+                      style={{
+                        maxWidth: '100%',
+                        maxHeight: '320px',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--border-subtle)',
+                        boxShadow: 'var(--shadow-sm)',
+                        cursor: 'zoom-in',
+                        objectFit: 'contain',
+                        background: 'var(--surface-3)'
+                      }} 
+                    />
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
