@@ -127,11 +127,10 @@ const upload = multer({
       return cb(new Error('الملفات من هذا النوع غير مسموح بها (exe, bat, sh, js)'));
     }
 
-    // Check if extension and mimeType are allowed
+    // Check if extension is allowed
     const isExtAllowed = ALLOWED_EXTENSIONS.includes(ext);
-    const isMimeAllowed = ALLOWED_MIME_TYPES.includes(mimeType);
 
-    if (!isExtAllowed || !isMimeAllowed) {
+    if (!isExtAllowed) {
       return cb(new Error('نوع الملف غير مدعوم. الأنواع المسموح بها هي: pdf, doc, docx, png, jpg, jpeg, zip, rar, psd, psb, ai, eps'));
     }
 
