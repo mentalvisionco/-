@@ -74,7 +74,7 @@ const { uploadFile, deleteFile } = require('./services/storage');
 const storage = multer.memoryStorage();
 
 const ALLOWED_EXTENSIONS = [
-  '.pdf', '.doc', '.docx', '.png', '.jpg', '.jpeg', '.zip',
+  '.pdf', '.doc', '.docx', '.png', '.jpg', '.jpeg', '.zip', '.rar',
   '.psd', '.psb', '.ai', '.eps'
 ];
 const ALLOWED_MIME_TYPES = [
@@ -86,6 +86,10 @@ const ALLOWED_MIME_TYPES = [
   'image/jpg',
   'application/zip',
   'application/x-zip-compressed',
+  'application/vnd.rar',
+  'application/x-rar-compressed',
+  'application/x-rar',
+  'application/rar',
   'application/octet-stream', // Generic binary stream (fallback for PSD/ZIP/AI/PSB on some browsers/OS)
   // Photoshop MIME types
   'image/vnd.adobe.photoshop',
@@ -112,7 +116,7 @@ const REJECTED_MIME_TYPES = [
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 500 * 1024 * 1024, // 500MB limit
+    fileSize: 600 * 1024 * 1024, // 600MB limit
   },
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -128,7 +132,7 @@ const upload = multer({
     const isMimeAllowed = ALLOWED_MIME_TYPES.includes(mimeType);
 
     if (!isExtAllowed || !isMimeAllowed) {
-      return cb(new Error('نوع الملف غير مدعوم. الأنواع المسموح بها هي: pdf, doc, docx, png, jpg, jpeg, zip, psd, psb, ai, eps'));
+      return cb(new Error('نوع الملف غير مدعوم. الأنواع المسموح بها هي: pdf, doc, docx, png, jpg, jpeg, zip, rar, psd, psb, ai, eps'));
     }
 
     cb(null, true);
@@ -533,7 +537,7 @@ app.post('/api/submissions', authenticateToken, requireStudent, uploadLimiter, (
     if (err) {
       if (err instanceof multer.MulterError) {
         if (err.code === 'LIMIT_FILE_SIZE') {
-          return res.status(400).json({ error: 'حجم الملف كبير جداً. الحد الأقصى هو 500 ميجابايت' });
+          return res.status(400).json({ error: 'حجم الملف كبير جداً. الحد الأقصى هو 600 ميجابايت' });
         }
         return res.status(400).json({ error: `خطأ في تحميل الملف: ${err.message}` });
       }
@@ -727,7 +731,7 @@ app.put('/api/admin/submissions/:id/grade', authenticateToken, requireAdmin, (re
     if (err) {
       if (err instanceof multer.MulterError) {
         if (err.code === 'LIMIT_FILE_SIZE') {
-          return res.status(400).json({ error: 'حجم الملف كبير جداً. الحد الأقصى هو 500 ميجابايت' });
+          return res.status(400).json({ error: 'حجم الملف كبير جداً. الحد الأقصى هو 600 ميجابايت' });
         }
         return res.status(400).json({ error: `خطأ في تحميل الملف: ${err.message}` });
       }

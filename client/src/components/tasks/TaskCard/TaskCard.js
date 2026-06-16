@@ -182,7 +182,7 @@ export default function TaskCard({ task, submission, onSubmit, onCancel }) {
           {/* File Upload Input */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-secondary)' }}>
-              تحميل ملف (PDF, DOCX, ZIP, صور, PSD, AI)
+              تحميل ملف (PDF, DOCX, ZIP, RAR, صور, PSD, AI)
             </label>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px' }}>
@@ -194,7 +194,7 @@ export default function TaskCard({ task, submission, onSubmit, onCancel }) {
                   setError('');
                 }}
                 style={{ display: 'none' }}
-                accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.zip,.psd,.psb,.ai,.eps"
+                accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.zip,.rar,.psd,.psb,.ai,.eps"
               />
 
               <label
