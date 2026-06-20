@@ -255,4 +255,47 @@ async function dbBackup(destPath) {
   return await db.backup(destPath);
 }
 
-module.exports = { setupDB, dbGet, dbAll, dbRun, logAudit, dbBackup };
+/**
+ * Run a callback inside a database transaction (atomic).
+ * If the callback throws, all changes are rolled back automatically.
+ */
+function dbTransaction(callback) {
+  if (!db) throw new Error('Database is not initialized');
+  const transaction = db.transaction(callback);
+  return transaction();
+}
+
+/**
+ * Enable or disable foreign key constraints.
+ * Must be called OUTSIDE of a transaction to take effect in SQLite.
+ */
+function toggleForeignKeys(enable) {
+  if (!db) throw new Error('Database is not initialized');
+  db.pragma(`foreign_keys = ${enable ? 'ON' : 'OFF'}`);
+}
+
+/**
+ * Replace the current database file with a new one (for .db restore).
+ * Closes the current connection, swaps the file, then re-initializes.
+ * Returns a promise that resolves when the new DB is ready.
+ */
+async function replaceDatabaseFile(newDbPath) {
+  if (!db) throw new Error('Database is not initialized');
+  const currentDbPath = db.name; // The path of the currently open database
+
+  // Close the current connection
+  db.close();
+  db = null;
+
+  // Replace the database file
+  fs.copyFileSync(newDbPath, currentDbPath);
+
+  // Re-initialize the connection (without re-creating tables/seeds)
+  db = new Database(currentDbPath, { verbose: null });
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+
+  logger.info(`[DB Replace] Database file replaced successfully from: ${path.basename(newDbPath)}`);
+}
+
+module.exports = { setupDB, dbGet, dbAll, dbRun, logAudit, dbBackup, dbTransaction, toggleForeignKeys, replaceDatabaseFile };

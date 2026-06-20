@@ -64,7 +64,7 @@ function validateEnv() {
 }
 validateEnv();
 
-const { setupDB, dbGet, dbAll, dbRun, logAudit, dbBackup } = require('./database');
+const { setupDB, dbGet, dbAll, dbRun, logAudit, dbBackup, dbTransaction, toggleForeignKeys, replaceDatabaseFile } = require('./database');
 const multer = require('multer');
 const { uploadFile, deleteFile } = require('./services/storage');
 
@@ -199,6 +199,22 @@ const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
+
+// ==============================
+// Maintenance Mode (activated during import)
+// ==============================
+let isMaintenanceMode = false;
+app.use((req, res, next) => {
+  if (isMaintenanceMode) {
+    // Allow admin backup/import endpoints through
+    const allowedPaths = ['/api/admin/import', '/api/admin/import-db', '/api/admin/backups', '/health'];
+    if (allowedPaths.some(p => req.path.startsWith(p))) {
+      return next();
+    }
+    return res.status(503).json({ error: 'النظام في وضع الصيانة — يرجى المحاولة بعد قليل' });
+  }
+  next();
+});
 app.use('/uploads', express.static(uploadsDir));
 
 app.use(express.static(path.join(__dirname, 'client', 'out'), { extensions: ['html'] }));
@@ -249,7 +265,11 @@ app.get('/health', (req, res) => {
 // ==============================
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  let token = authHeader && authHeader.split(' ')[1];
+
+  if (!token && req.query.token) {
+    token = req.query.token;
+  }
 
   if (!token) {
     return res.status(401).json({ error: 'غير مصرح لك - يرجى تسجيل الدخول' });
@@ -519,7 +539,7 @@ app.get('/api/lectures', authenticateToken, (req, res) => {
       FROM lectures l
       LEFT JOIN ratings r ON l.id = r.lectureId
       GROUP BY l.id
-      ORDER BY l.orderNum ASC
+      ORDER BY l.id DESC
     `);
     res.json(lectures);
   } catch (error) {
@@ -631,7 +651,7 @@ app.post('/api/submissions', authenticateToken, requireStudent, uploadLimiter, (
 
 app.get('/api/submissions/me', authenticateToken, (req, res) => {
   try {
-    const submissions = dbAll('SELECT * FROM submissions WHERE userId = ?', [req.user.id]);
+    const submissions = dbAll('SELECT * FROM submissions WHERE userId = ? ORDER BY id DESC', [req.user.id]);
     res.json(submissions);
   } catch (error) {
     logger.error('My submissions error: %s', error.stack);
@@ -667,12 +687,20 @@ app.delete('/api/submissions/:taskId', authenticateToken, requireStudent, async 
 
     // Clean up local teacher feedback file if exists
     if (existing.feedbackFileId) {
-      const oldFilePath = path.join(uploadsDir, existing.feedbackFileId);
-      if (fs.existsSync(oldFilePath)) {
+      if (existing.feedbackFileId && String(existing.feedbackFileId).length > 20) {
         try {
-          fs.unlinkSync(oldFilePath);
+          await deleteFile(existing.feedbackFileId);
         } catch (err) {
-          logger.warn('Failed to delete local feedback file on submission delete: %s', err.message);
+          logger.warn('Failed to delete drive feedback file on submission delete: %s', err.message);
+        }
+      } else {
+        const oldFilePath = path.join(uploadsDir, existing.feedbackFileId);
+        if (fs.existsSync(oldFilePath)) {
+          try {
+            fs.unlinkSync(oldFilePath);
+          } catch (err) {
+            logger.warn('Failed to delete local feedback file on submission delete: %s', err.message);
+          }
         }
       }
     }
@@ -764,40 +792,37 @@ app.put('/api/admin/submissions/:id/grade', authenticateToken, requireAdmin, (re
       let originalName = sub.feedbackFileName;
 
       if (req.file) {
-        // Delete old local file if exists
+        // Delete old file if exists
         if (sub.feedbackFileId) {
-          const oldFilePath = path.join(uploadsDir, sub.feedbackFileId);
-          if (fs.existsSync(oldFilePath)) {
-            try {
-              fs.unlinkSync(oldFilePath);
-            } catch (err) {
-              logger.warn('Failed to delete old local feedback file: %s', err.message);
+          if (String(sub.feedbackFileId).length > 20) {
+            try { await deleteFile(sub.feedbackFileId); } catch(err){}
+          } else {
+            const oldFilePath = path.join(uploadsDir, sub.feedbackFileId);
+            if (fs.existsSync(oldFilePath)) {
+              try { fs.unlinkSync(oldFilePath); } catch (err) {}
             }
           }
         }
 
-        // Save new file locally
-        const fileExt = path.extname(req.file.originalname).toLowerCase();
-        const uniqueFilename = `feedback-${req.params.id}-${Date.now()}${fileExt}`;
-        const filePath = path.join(uploadsDir, uniqueFilename);
-        fs.writeFileSync(filePath, req.file.buffer);
-
-        // Build URL dynamically
-        const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-        const host = req.get('host');
-        
-        fileId = uniqueFilename;
-        driveUrl = `${protocol}://${host}/uploads/${uniqueFilename}`;
-        originalName = req.file.originalname;
+        try {
+          // Save new file to Google Drive
+          const uploadResult = await uploadFile(req.file);
+          fileId = uploadResult.id;
+          driveUrl = uploadResult.webViewLink;
+          originalName = req.file.originalname;
+        } catch (uploadError) {
+          logger.error('Google Drive Upload error: %s', uploadError.stack);
+          return res.status(500).json({ error: 'حدث خطأ أثناء رفع الصورة التوضيحية إلى Google Drive' });
+        }
       } else if (deleteFeedbackFile === 'true') {
-        // Delete old local file
+        // Delete old file
         if (sub.feedbackFileId) {
-          const oldFilePath = path.join(uploadsDir, sub.feedbackFileId);
-          if (fs.existsSync(oldFilePath)) {
-            try {
-              fs.unlinkSync(oldFilePath);
-            } catch (err) {
-              logger.warn('Failed to delete local feedback file: %s', err.message);
+          if (String(sub.feedbackFileId).length > 20) {
+            try { await deleteFile(sub.feedbackFileId); } catch(err){}
+          } else {
+            const oldFilePath = path.join(uploadsDir, sub.feedbackFileId);
+            if (fs.existsSync(oldFilePath)) {
+              try { fs.unlinkSync(oldFilePath); } catch (err) {}
             }
           }
         }
@@ -842,7 +867,7 @@ app.get('/api/admin/students', authenticateToken, requireViewerOrAdmin, (req, re
       LEFT JOIN submissions s ON u.id = s.userId
       WHERE u.role = 'student'
       GROUP BY u.id
-      ORDER BY u.name ASC
+      ORDER BY u.id DESC
     `);
 
     res.json(students);
@@ -871,7 +896,7 @@ app.put('/api/admin/students/:id/fill-card', authenticateToken, requireAdmin, (r
   }
 });
 
-app.delete('/api/admin/students/:id', authenticateToken, requireAdmin, (req, res) => {
+app.delete('/api/admin/students/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const student = dbGet('SELECT id, name, username FROM users WHERE id = ? AND role = ?', [req.params.id, 'student']);
     if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
@@ -880,12 +905,12 @@ app.delete('/api/admin/students/:id', authenticateToken, requireAdmin, (req, res
     const studentSubs = dbAll('SELECT feedbackFileId FROM submissions WHERE userId = ?', [req.params.id]);
     for (const sub of studentSubs) {
       if (sub.feedbackFileId) {
-        const oldFilePath = path.join(uploadsDir, sub.feedbackFileId);
-        if (fs.existsSync(oldFilePath)) {
-          try {
-            fs.unlinkSync(oldFilePath);
-          } catch (err) {
-            logger.warn('Failed to delete local feedback file: %s', err.message);
+        if (String(sub.feedbackFileId).length > 20) {
+          try { await deleteFile(sub.feedbackFileId); } catch(err){}
+        } else {
+          const oldFilePath = path.join(uploadsDir, sub.feedbackFileId);
+          if (fs.existsSync(oldFilePath)) {
+            try { fs.unlinkSync(oldFilePath); } catch (err) {}
           }
         }
       }
@@ -1112,7 +1137,7 @@ app.put('/api/admin/tasks/:id', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
-app.delete('/api/admin/tasks/:id', authenticateToken, requireAdmin, (req, res) => {
+app.delete('/api/admin/tasks/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const task = dbGet('SELECT id, title FROM tasks WHERE id = ?', [req.params.id]);
     if (!task) return res.status(404).json({ error: 'المهمة غير موجودة' });
@@ -1121,12 +1146,12 @@ app.delete('/api/admin/tasks/:id', authenticateToken, requireAdmin, (req, res) =
     const taskSubs = dbAll('SELECT feedbackFileId FROM submissions WHERE taskId = ?', [req.params.id]);
     for (const sub of taskSubs) {
       if (sub.feedbackFileId) {
-        const oldFilePath = path.join(uploadsDir, sub.feedbackFileId);
-        if (fs.existsSync(oldFilePath)) {
-          try {
-            fs.unlinkSync(oldFilePath);
-          } catch (err) {
-            logger.warn('Failed to delete local feedback file: %s', err.message);
+        if (String(sub.feedbackFileId).length > 20) {
+          try { await deleteFile(sub.feedbackFileId); } catch(err){}
+        } else {
+          const oldFilePath = path.join(uploadsDir, sub.feedbackFileId);
+          if (fs.existsSync(oldFilePath)) {
+            try { fs.unlinkSync(oldFilePath); } catch (err) {}
           }
         }
       }
@@ -1558,6 +1583,12 @@ function validateBackupSchema(data) {
   // Validate individual records
   const warnings = [];
 
+  // Build ID sets for FK integrity checks
+  const userIds = new Set(data.data.users.map(u => u.id));
+  const lectureIds = new Set(data.data.lectures.map(l => l.id));
+  const taskIds = new Set(data.data.tasks.map(t => t.id));
+  const sessionIds = new Set((data.data.attendance_sessions || []).map(s => s.id));
+
   for (const user of data.data.users) {
     if (!user.id || !user.name || (!user.username && !user.email) || !user.password || !user.role) {
       errors.push(`مستخدم غير مكتمل البيانات (ID: ${user.id || '?'})`);
@@ -1583,6 +1614,13 @@ function validateBackupSchema(data) {
     if (!sub.id || !sub.userId || !sub.taskId || !sub.fileUrl) {
       errors.push(`تسليم غير مكتمل البيانات (ID: ${sub.id || '?'})`);
     }
+    // FK integrity: check userId and taskId exist in backup data
+    if (sub.userId && !userIds.has(sub.userId)) {
+      warnings.push(`تسليم #${sub.id} يشير لمستخدم غير موجود (userId: ${sub.userId})`);
+    }
+    if (sub.taskId && !taskIds.has(sub.taskId)) {
+      warnings.push(`تسليم #${sub.id} يشير لمهمة غير موجودة (taskId: ${sub.taskId})`);
+    }
   }
 
   for (const r of data.data.ratings) {
@@ -1591,6 +1629,29 @@ function validateBackupSchema(data) {
     }
     if (r.rating && (r.rating < 1 || r.rating > 5)) {
       warnings.push(`تقييم خارج النطاق (${r.rating}) للتقييم ${r.id}`);
+    }
+    // FK integrity: check userId and lectureId exist
+    if (r.userId && !userIds.has(r.userId)) {
+      warnings.push(`تقييم #${r.id} يشير لمستخدم غير موجود (userId: ${r.userId})`);
+    }
+    if (r.lectureId && !lectureIds.has(r.lectureId)) {
+      warnings.push(`تقييم #${r.id} يشير لمحاضرة غير موجودة (lectureId: ${r.lectureId})`);
+    }
+  }
+
+  // FK integrity for attendance records
+  for (const ar of (data.data.attendance_records || [])) {
+    if (ar.sessionId && !sessionIds.has(ar.sessionId)) {
+      warnings.push(`سجل حضور #${ar.id} يشير لجلسة غير موجودة (sessionId: ${ar.sessionId})`);
+    }
+    if (ar.studentId && !userIds.has(ar.studentId)) {
+      warnings.push(`سجل حضور #${ar.id} يشير لطالب غير موجود (studentId: ${ar.studentId})`);
+    }
+  }
+
+  for (const as of (data.data.attendance_sessions || [])) {
+    if (as.createdBy && !userIds.has(as.createdBy)) {
+      warnings.push(`جلسة حضور #${as.id} يشير لمنشئ غير موجود (createdBy: ${as.createdBy})`);
     }
   }
 
@@ -1632,6 +1693,11 @@ function buildExportPayload(scope = 'full') {
     payload.meta.tables.attendance_sessions = payload.data.attendance_sessions.length;
     payload.meta.tables.attendance_records = payload.data.attendance_records.length;
   }
+  // Include audit_logs in full exports
+  if (scope === 'full') {
+    payload.data.audit_logs = dbAll('SELECT * FROM audit_logs');
+    payload.meta.tables.audit_logs = payload.data.audit_logs.length;
+  }
 
   // For non-full scopes, fill missing tables with empty arrays for schema compatibility
   if (scope !== 'full') {
@@ -1648,7 +1714,7 @@ function buildExportPayload(scope = 'full') {
 // --- Export ---
 app.get('/api/admin/export', authenticateToken, requireAdmin, (req, res) => {
   try {
-    const scope = ['full', 'users', 'content', 'submissions'].includes(req.query.scope)
+    const scope = ['full', 'users', 'content', 'submissions', 'attendance'].includes(req.query.scope)
       ? req.query.scope : 'full';
 
     const payload = buildExportPayload(scope);
@@ -1706,13 +1772,23 @@ app.post('/api/admin/validate-backup', authenticateToken, requireAdmin, express.
       conflicts.push(`يوجد ${duplicateIdentifiers.length} حساب مكرر في النسخة الاحتياطية`);
     }
 
+    // Warn if imported data is significantly smaller than current (might be outdated or incomplete)
+    const dataSizeWarnings = validation.warnings || [];
+    for (const table of Object.keys(currentCounts)) {
+      const current = currentCounts[table];
+      const imported = importCounts[table];
+      if (current > 0 && imported < current * 0.5) {
+        dataSizeWarnings.push(`تحذير: جدول "${table}" في النسخة (${imported}) أقل بنسبة كبيرة من الحالي (${current}) — قد تكون النسخة قديمة`);
+      }
+    }
+
     res.json({
       valid: true,
       meta: backupData.meta,
       currentCounts,
       importCounts,
       conflicts,
-      warnings: validation.warnings || [],
+      warnings: dataSizeWarnings,
     });
   } catch (error) {
     logger.error('Validate error: %s', error.stack);
@@ -1720,8 +1796,8 @@ app.post('/api/admin/validate-backup', authenticateToken, requireAdmin, express.
   }
 });
 
-// --- Import / Restore ---
-app.post('/api/admin/import', authenticateToken, requireAdmin, express.json({ limit: '50mb' }), (req, res) => {
+// --- Import / Restore (JSON) ---
+app.post('/api/admin/import', authenticateToken, requireAdmin, express.json({ limit: '50mb' }), async (req, res) => {
   try {
     const backupData = req.body;
 
@@ -1731,93 +1807,25 @@ app.post('/api/admin/import', authenticateToken, requireAdmin, express.json({ li
       return res.status(400).json({ error: 'ملف النسخة الاحتياطية غير صالح', details: validation.errors });
     }
 
-    // Create automatic pre-import backup
-    ensureBackupsDir();
-    const preBackup = buildExportPayload('full');
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupFilename = `pre-import-${timestamp}.json`;
-    const backupPath = path.join(BACKUPS_DIR, backupFilename);
-    fs.writeFileSync(backupPath, JSON.stringify(preBackup, null, 2), 'utf-8');
-    logger.info(`[Import] Pre-import backup saved: ${backupFilename}`);
+    // Activate maintenance mode to block other requests
+    isMaintenanceMode = true;
+    logger.info('[Import] Maintenance mode activated');
 
-    // Perform import in a transaction with auto-rollback
-    let importSuccess = false;
     try {
-      // Step 1: Delete all existing data (FK-safe order)
-      dbRun('DELETE FROM attendance_records');
-      dbRun('DELETE FROM attendance_sessions');
-      dbRun('DELETE FROM ratings');
-      dbRun('DELETE FROM submissions');
-      dbRun('DELETE FROM tasks');
-      dbRun('DELETE FROM lectures');
-      dbRun('DELETE FROM users');
+      // Create pre-import backup using SQLite backup API (no memory overhead)
+      ensureBackupsDir();
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const backupFilename = `pre-import-${timestamp}.db`;
+      const backupPath = path.join(BACKUPS_DIR, backupFilename);
+      await dbBackup(backupPath);
+      logger.info(`[Import] Pre-import backup saved: ${backupFilename}`);
 
-      // Step 2: Insert imported data with original IDs
-      const { users, lectures, tasks, submissions, ratings } = backupData.data;
-      const attSessions = backupData.data.attendance_sessions || [];
-      const attRecords = backupData.data.attendance_records || [];
+      // Disable foreign keys to prevent cascade deletions (sessions, audit_logs)
+      toggleForeignKeys(false);
 
-      for (const u of users) {
-        dbRun(
-          'INSERT INTO users (id, name, username, password, role, points, fill_card_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-          [u.id, sanitizeBackupString(u.name), sanitizeBackupString(u.username || u.email), u.password, u.role, u.points || 0, u.fill_card_count || 0, u.created_at || new Date().toISOString()]
-        );
-      }
-
-      for (const l of lectures) {
-        dbRun(
-          'INSERT INTO lectures (id, title, description, materialUrl, orderNum, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-          [l.id, sanitizeBackupString(l.title), sanitizeBackupString(l.description), sanitizeBackupString(l.materialUrl), l.orderNum || 0, l.created_at || new Date().toISOString()]
-        );
-      }
-
-      for (const t of tasks) {
-        dbRun(
-          'INSERT INTO tasks (id, title, description, taskUrl, created_at) VALUES (?, ?, ?, ?, ?)',
-          [t.id, sanitizeBackupString(t.title), sanitizeBackupString(t.description), sanitizeBackupString(t.taskUrl), t.created_at || new Date().toISOString()]
-        );
-      }
-
-      for (const s of submissions) {
-        dbRun(
-          'INSERT INTO submissions (id, userId, taskId, fileUrl, uploadedFileId, uploadedFileUrl, uploadedFileName, storageProvider, grade, feedback, feedbackFileId, feedbackFileUrl, feedbackFileName, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [
-            s.id, s.userId, s.taskId, sanitizeBackupString(s.fileUrl), 
-            s.uploadedFileId || null, s.uploadedFileUrl || null, s.uploadedFileName || null, s.storageProvider || null, 
-            s.grade || null, sanitizeBackupString(s.feedback),
-            s.feedbackFileId || null, s.feedbackFileUrl || null, s.feedbackFileName || null,
-            s.created_at || new Date().toISOString()
-          ]
-        );
-      }
-
-      for (const r of ratings) {
-        dbRun(
-          'INSERT INTO ratings (id, userId, lectureId, rating, comment, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-          [r.id, r.userId, r.lectureId, r.rating, sanitizeBackupString(r.comment), r.created_at || new Date().toISOString()]
-        );
-      }
-
-      for (const as of attSessions) {
-        dbRun(
-          'INSERT INTO attendance_sessions (id, title, description, notes, lectureId, attendanceDate, bonusPoints, latePoints, isLocked, createdBy, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [as.id, sanitizeBackupString(as.title), sanitizeBackupString(as.description), sanitizeBackupString(as.notes), as.lectureId, as.attendanceDate, as.bonusPoints || 50, as.latePoints || 35, as.isLocked || 0, as.createdBy, as.created_at || new Date().toISOString()]
-        );
-      }
-
-      for (const ar of attRecords) {
-        dbRun(
-          'INSERT INTO attendance_records (id, sessionId, studentId, status, awardedPoints, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [ar.id, ar.sessionId, ar.studentId, ar.status, ar.awardedPoints || 0, sanitizeBackupString(ar.notes) || null, ar.created_at || new Date().toISOString()]
-        );
-      }
-
-      importSuccess = true;
-    } catch (importError) {
-      logger.error('Import failed, attempting auto-rollback: %s', importError.stack);
-
-      // Auto-rollback: restore from the pre-import backup
-      try {
+      // Perform import inside a transaction (atomic — auto-rollback on error)
+      dbTransaction(() => {
+        // Step 1: Delete data tables (FK-safe order, but FK is OFF so order is just for clarity)
         dbRun('DELETE FROM attendance_records');
         dbRun('DELETE FROM attendance_sessions');
         dbRun('DELETE FROM ratings');
@@ -1826,63 +1834,82 @@ app.post('/api/admin/import', authenticateToken, requireAdmin, express.json({ li
         dbRun('DELETE FROM lectures');
         dbRun('DELETE FROM users');
 
-        const rollbackData = JSON.parse(fs.readFileSync(backupPath, 'utf-8'));
-        const { users, lectures, tasks, submissions, ratings } = rollbackData.data;
-        const rbAttSessions = rollbackData.data.attendance_sessions || [];
-        const rbAttRecords = rollbackData.data.attendance_records || [];
+        // Step 2: Insert imported data with original IDs (using ?? instead of || for falsy safety)
+        const { users, lectures, tasks, submissions, ratings } = backupData.data;
+        const attSessions = backupData.data.attendance_sessions || [];
+        const attRecords = backupData.data.attendance_records || [];
+        const auditLogs = backupData.data.audit_logs || [];
 
         for (const u of users) {
-          dbRun('INSERT INTO users (id, name, username, password, role, points, fill_card_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [u.id, u.name, u.username || u.email, u.password, u.role, u.points || 0, u.fill_card_count || 0, u.created_at]);
+          dbRun(
+            'INSERT INTO users (id, name, username, password, role, points, fill_card_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [u.id, sanitizeBackupString(u.name), sanitizeBackupString(u.username || u.email), u.password, u.role, u.points ?? 0, u.fill_card_count ?? 0, u.created_at ?? new Date().toISOString()]
+          );
         }
+
         for (const l of lectures) {
-          dbRun('INSERT INTO lectures (id, title, description, materialUrl, orderNum, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-            [l.id, l.title, l.description, l.materialUrl, l.orderNum || 0, l.created_at]);
+          dbRun(
+            'INSERT INTO lectures (id, title, description, materialUrl, orderNum, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            [l.id, sanitizeBackupString(l.title), sanitizeBackupString(l.description), sanitizeBackupString(l.materialUrl), l.orderNum ?? 0, l.created_at ?? new Date().toISOString()]
+          );
         }
+
         for (const t of tasks) {
-          dbRun('INSERT INTO tasks (id, title, description, taskUrl, created_at) VALUES (?, ?, ?, ?, ?)',
-            [t.id, t.title, t.description, t.taskUrl, t.created_at]);
+          dbRun(
+            'INSERT INTO tasks (id, title, description, taskUrl, created_at) VALUES (?, ?, ?, ?, ?)',
+            [t.id, sanitizeBackupString(t.title), sanitizeBackupString(t.description), sanitizeBackupString(t.taskUrl), t.created_at ?? new Date().toISOString()]
+          );
         }
+
         for (const s of submissions) {
-          dbRun('INSERT INTO submissions (id, userId, taskId, fileUrl, uploadedFileId, uploadedFileUrl, uploadedFileName, storageProvider, grade, feedback, feedbackFileId, feedbackFileUrl, feedbackFileName, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          dbRun(
+            'INSERT INTO submissions (id, userId, taskId, fileUrl, uploadedFileId, uploadedFileUrl, uploadedFileName, storageProvider, grade, feedback, feedbackFileId, feedbackFileUrl, feedbackFileName, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
-              s.id, s.userId, s.taskId, s.fileUrl, 
-              s.uploadedFileId || null, s.uploadedFileUrl || null, s.uploadedFileName || null, s.storageProvider || null, 
-              s.grade || null, s.feedback, 
-              s.feedbackFileId || null, s.feedbackFileUrl || null, s.feedbackFileName || null, 
-              s.created_at
-            ]);
+              s.id, s.userId, s.taskId, sanitizeBackupString(s.fileUrl),
+              s.uploadedFileId ?? null, s.uploadedFileUrl ?? null, s.uploadedFileName ?? null, s.storageProvider ?? null,
+              s.grade ?? null, sanitizeBackupString(s.feedback),
+              s.feedbackFileId ?? null, s.feedbackFileUrl ?? null, s.feedbackFileName ?? null,
+              s.created_at ?? new Date().toISOString()
+            ]
+          );
         }
+
         for (const r of ratings) {
-          dbRun('INSERT INTO ratings (id, userId, lectureId, rating, comment, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-            [r.id, r.userId, r.lectureId, r.rating, r.comment, r.created_at]);
-        }
-        for (const as of rbAttSessions) {
-          dbRun('INSERT INTO attendance_sessions (id, title, description, notes, lectureId, attendanceDate, bonusPoints, latePoints, isLocked, createdBy, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [as.id, as.title, as.description, as.notes, as.lectureId, as.attendanceDate, as.bonusPoints || 50, as.latePoints || 35, as.isLocked || 0, as.createdBy, as.created_at]);
-        }
-        for (const ar of rbAttRecords) {
-          dbRun('INSERT INTO attendance_records (id, sessionId, studentId, status, awardedPoints, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [ar.id, ar.sessionId, ar.studentId, ar.status, ar.awardedPoints || 0, ar.notes || null, ar.created_at]);
+          dbRun(
+            'INSERT INTO ratings (id, userId, lectureId, rating, comment, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            [r.id, r.userId, r.lectureId, r.rating, sanitizeBackupString(r.comment), r.created_at ?? new Date().toISOString()]
+          );
         }
 
-        logger.info('[Import Rollback] Auto-rollback successful — data restored to pre-import state');
-        return res.status(500).json({
-          error: 'فشل الاستيراد — تم استعادة البيانات السابقة تلقائياً',
-          rollback: true,
-          details: importError.message,
-        });
-      } catch (rollbackError) {
-        logger.error('CRITICAL: Rollback also failed: %s', rollbackError.stack);
-        return res.status(500).json({
-          error: 'فشل الاستيراد وفشلت الاستعادة التلقائية — يرجى استعادة النسخة الاحتياطية يدوياً',
-          rollback: false,
-          backupFile: backupFilename,
-        });
-      }
-    }
+        for (const as of attSessions) {
+          dbRun(
+            'INSERT INTO attendance_sessions (id, title, description, notes, lectureId, attendanceDate, bonusPoints, latePoints, isLocked, createdBy, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [as.id, sanitizeBackupString(as.title), sanitizeBackupString(as.description), sanitizeBackupString(as.notes), as.lectureId, as.attendanceDate, as.bonusPoints ?? 50, as.latePoints ?? 35, as.isLocked ?? 0, as.createdBy, as.created_at ?? new Date().toISOString()]
+          );
+        }
 
-    if (importSuccess) {
+        for (const ar of attRecords) {
+          dbRun(
+            'INSERT INTO attendance_records (id, sessionId, studentId, status, awardedPoints, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [ar.id, ar.sessionId, ar.studentId, ar.status, ar.awardedPoints ?? 0, sanitizeBackupString(ar.notes) ?? null, ar.created_at ?? new Date().toISOString()]
+          );
+        }
+
+        // Restore audit_logs if present in backup
+        if (auditLogs.length > 0) {
+          dbRun('DELETE FROM audit_logs');
+          for (const log of auditLogs) {
+            dbRun(
+              'INSERT INTO audit_logs (id, userId, action, details, ipAddress, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+              [log.id, log.userId, log.action, log.details, log.ipAddress, log.created_at ?? new Date().toISOString()]
+            );
+          }
+        }
+      });
+
+      // Re-enable foreign keys and verify integrity
+      toggleForeignKeys(true);
+
       const summary = {
         users: backupData.data.users.length,
         lectures: backupData.data.lectures.length,
@@ -1891,6 +1918,7 @@ app.post('/api/admin/import', authenticateToken, requireAdmin, express.json({ li
         ratings: backupData.data.ratings.length,
         attendance_sessions: (backupData.data.attendance_sessions || []).length,
         attendance_records: (backupData.data.attendance_records || []).length,
+        audit_logs: (backupData.data.audit_logs || []).length,
       };
       logger.info('[Import] Import completed successfully: %o', summary);
       logAudit(req.user.id, 'db_import', { summary, preImportBackup: backupFilename }, req);
@@ -1899,10 +1927,97 @@ app.post('/api/admin/import', authenticateToken, requireAdmin, express.json({ li
         summary,
         backupFile: backupFilename,
       });
+    } catch (importError) {
+      // Transaction auto-rolled back — data is safe
+      logger.error('Import failed (transaction rolled back automatically): %s', importError.stack);
+      // Ensure foreign keys are re-enabled even on error
+      try { toggleForeignKeys(true); } catch (_) { /* ignore */ }
+      res.status(500).json({
+        error: 'فشل الاستيراد — تم التراجع تلقائياً والبيانات لم تتأثر',
+        details: importError.message,
+      });
+    } finally {
+      isMaintenanceMode = false;
+      logger.info('[Import] Maintenance mode deactivated');
     }
   } catch (error) {
+    isMaintenanceMode = false;
     logger.error('Import error: %s', error.stack);
     res.status(500).json({ error: 'حدث خطأ أثناء استيراد البيانات' });
+  }
+});
+
+// --- Import / Restore (.db file) ---
+const dbUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      ensureBackupsDir();
+      cb(null, BACKUPS_DIR);
+    },
+    filename: (req, file, cb) => {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      cb(null, `uploaded-restore-${timestamp}.db`);
+    }
+  }),
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB max for DB files
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext !== '.db' && ext !== '.sqlite') {
+      return cb(new Error('يجب أن يكون الملف بصيغة .db أو .sqlite'));
+    }
+    cb(null, true);
+  }
+});
+
+app.post('/api/admin/import-db', authenticateToken, requireAdmin, dbUpload.single('dbfile'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'لم يتم رفع أي ملف' });
+    }
+
+    const uploadedDbPath = req.file.path;
+
+    // Activate maintenance mode
+    isMaintenanceMode = true;
+    logger.info('[DB Import] Maintenance mode activated');
+
+    try {
+      // Create pre-import backup of current database
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const backupFilename = `pre-import-${timestamp}.db`;
+      const backupPath = path.join(BACKUPS_DIR, backupFilename);
+      await dbBackup(backupPath);
+      logger.info(`[DB Import] Pre-import backup saved: ${backupFilename}`);
+
+      // Replace database file (closes connection, swaps file, re-opens)
+      await replaceDatabaseFile(uploadedDbPath);
+
+      // Clean up the uploaded temp file
+      try { fs.unlinkSync(uploadedDbPath); } catch (_) { /* ignore */ }
+
+      logger.info('[DB Import] Database file replaced successfully');
+      logAudit(null, 'db_import_file', { backupFilename, uploadedFile: req.file.originalname });
+
+      res.json({
+        message: 'تم استعادة قاعدة البيانات بنجاح من ملف .db',
+        backupFile: backupFilename,
+      });
+    } catch (importError) {
+      logger.error('DB Import failed: %s', importError.stack);
+      // Clean up uploaded file
+      try { if (req.file?.path) fs.unlinkSync(req.file.path); } catch (_) { /* ignore */ }
+      res.status(500).json({
+        error: 'فشل استعادة قاعدة البيانات',
+        details: importError.message,
+      });
+    } finally {
+      isMaintenanceMode = false;
+      logger.info('[DB Import] Maintenance mode deactivated');
+    }
+  } catch (error) {
+    isMaintenanceMode = false;
+    logger.error('DB Import error: %s', error.stack);
+    res.status(500).json({ error: 'حدث خطأ أثناء استعادة قاعدة البيانات' });
   }
 });
 
@@ -2007,7 +2122,9 @@ function runDatabaseBackup() {
 function cleanupOldBackups() {
   try {
     ensureBackupsDir();
-    const files = fs.readdirSync(BACKUPS_DIR)
+
+    // Cleanup auto-backup files (keep last 10)
+    const autoBackups = fs.readdirSync(BACKUPS_DIR)
       .filter(f => f.startsWith('auto-backup-') && f.endsWith('.db'))
       .map(filename => {
         const filePath = path.join(BACKUPS_DIR, filename);
@@ -2016,11 +2133,27 @@ function cleanupOldBackups() {
       })
       .sort((a, b) => b.mtime - a.mtime); // Newest first
 
-    if (files.length > 10) {
-      const toDelete = files.slice(10);
-      for (const file of toDelete) {
+    if (autoBackups.length > 10) {
+      for (const file of autoBackups.slice(10)) {
         fs.unlinkSync(file.filePath);
-        logger.info(`[Backup Cleanup] Deleted old database backup: ${file.filename}`);
+        logger.info(`[Backup Cleanup] Deleted old auto backup: ${file.filename}`);
+      }
+    }
+
+    // Cleanup pre-import backup files (keep last 5)
+    const preImportBackups = fs.readdirSync(BACKUPS_DIR)
+      .filter(f => f.startsWith('pre-import-'))
+      .map(filename => {
+        const filePath = path.join(BACKUPS_DIR, filename);
+        const stats = fs.statSync(filePath);
+        return { filename, filePath, mtime: stats.mtime };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+
+    if (preImportBackups.length > 5) {
+      for (const file of preImportBackups.slice(5)) {
+        fs.unlinkSync(file.filePath);
+        logger.info(`[Backup Cleanup] Deleted old pre-import backup: ${file.filename}`);
       }
     }
   } catch (err) {
@@ -2040,6 +2173,10 @@ function scheduleAutoBackup() {
 // ==============================
 // SPA Fallback Route
 // ==============================
+app.use('/uploads', (req, res) => {
+  res.status(404).send('File not found');
+});
+
 app.use((req, res) => {
   if (req.path.startsWith('/api')) {
     res.status(404).json({ error: 'Endpoint not found' });

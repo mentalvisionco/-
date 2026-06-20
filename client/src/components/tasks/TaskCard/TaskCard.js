@@ -141,9 +141,10 @@ export default function TaskCard({ task, submission, onSubmit, onCancel }) {
               {submission.feedbackFileUrl && (
                 <div style={{ marginTop: submission.feedback ? '4px' : '0' }}>
                   <span style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '8px', fontWeight: '500' }}>الصورة التوضيحية المرفقة من المعلم:</span>
-                  <a href={submission.feedbackFileUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', maxWidth: '100%' }}>
+                  <a href={submission.feedbackFileUrl.includes('drive.google.com/file/d/') ? `https://drive.google.com/uc?export=view&id=${submission.feedbackFileUrl.match(/drive\.google\.com\/file\/d\/([^\/]+)/)?.[1]}` : submission.feedbackFileUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', maxWidth: '100%' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img 
-                      src={submission.feedbackFileUrl} 
+                      src={submission.feedbackFileUrl.includes('drive.google.com/file/d/') ? `https://drive.google.com/uc?export=view&id=${submission.feedbackFileUrl.match(/drive\.google\.com\/file\/d\/([^\/]+)/)?.[1]}` : submission.feedbackFileUrl} 
                       alt="توضيح المعلم" 
                       style={{
                         maxWidth: '100%',

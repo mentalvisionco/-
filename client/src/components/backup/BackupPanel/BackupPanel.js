@@ -18,6 +18,7 @@ const SCOPE_OPTIONS = [
   { value: 'users', label: 'المستخدمين فقط', desc: 'الحسابات والنقاط' },
   { value: 'content', label: 'المحتوى فقط', desc: 'المحاضرات والمهام' },
   { value: 'submissions', label: 'التسليمات فقط', desc: 'التسليمات والتقييمات' },
+  { value: 'attendance', label: 'الحضور فقط', desc: 'جلسات وسجلات الحضور' },
 ];
 
 const TABLE_LABELS = {
@@ -98,21 +99,15 @@ export default function BackupPanel() {
     setExporting(true);
     setExportSuccess(false);
     try {
-      const res = await fetch(`${API_URL}/admin/export?scope=${exportScope}`, {
-        headers: { 'Authorization': `Bearer ${getToken()}` },
-      });
-      if (!res.ok) throw new Error('فشل التصدير');
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
       const date = new Date().toISOString().slice(0, 10);
+      const filename = `lms-backup-${exportScope}-${date}.json`;
+      const url = `${API_URL}/admin/export?scope=${exportScope}&token=${getToken()}`;
+      const a = document.createElement('a');
       a.href = url;
-      a.download = `lms-backup-${exportScope}-${date}.json`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
 
       setExportSuccess(true);
       toast.success('تم تصدير البيانات بنجاح');
@@ -128,13 +123,28 @@ export default function BackupPanel() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const isDb = file.name.endsWith('.db') || file.name.endsWith('.sqlite');
+    const isJson = file.name.endsWith('.json');
+
     // Validate extension
-    if (!file.name.endsWith('.json')) {
-      toast.error('يرجى اختيار ملف بصيغة JSON فقط');
+    if (!isJson && !isDb) {
+      toast.error('يرجى اختيار ملف بصيغة JSON أو DB');
       return;
     }
 
-    // Validate size (50MB max)
+    // Handle .db file upload (direct database restore)
+    if (isDb) {
+      if (file.size > 500 * 1024 * 1024) {
+        toast.error('حجم الملف يتجاوز الحد الأقصى (500 ميغابايت)');
+        return;
+      }
+      setImportFile({ file, isDb: true });
+      setDryRunResult({ valid: true, isDbFile: true });
+      setImportSuccess(false);
+      return;
+    }
+
+    // Validate size (50MB max for JSON)
     if (file.size > 50 * 1024 * 1024) {
       toast.error('حجم الملف يتجاوز الحد الأقصى (50 ميغابايت)');
       return;
@@ -189,30 +199,41 @@ export default function BackupPanel() {
   // ------- IMPORT -------
   const handleImport = async () => {
     setConfirmImport(false);
-    if (!importFile?.parsed) return;
+    if (!importFile) return;
 
     setImporting(true);
     try {
-      const res = await fetch(`${API_URL}/admin/import`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify(importFile.parsed),
-      });
+      let res;
+
+      if (importFile.isDb) {
+        // Upload .db file via FormData
+        const formData = new FormData();
+        formData.append('dbfile', importFile.file);
+        res = await fetch(`${API_URL}/admin/import-db`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${getToken()}` },
+          body: formData,
+        });
+      } else {
+        // Send JSON import
+        res = await fetch(`${API_URL}/admin/import`, {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify(importFile.parsed),
+        });
+      }
+
       const data = await res.json();
 
       if (!res.ok) {
-        if (data.rollback) {
-          toast.warning(data.error);
-        } else {
-          toast.error(data.error);
-        }
+        toast.error(data.error || 'حدث خطأ أثناء الاستيراد');
         return;
       }
 
       setImportSuccess(true);
       setImportFile(null);
       setDryRunResult(null);
-      toast.success('تم استيراد البيانات بنجاح');
+      toast.success(data.message || 'تم استيراد البيانات بنجاح');
       fetchBackups();
 
       setTimeout(() => setImportSuccess(false), 5000);
@@ -223,21 +244,15 @@ export default function BackupPanel() {
   };
 
   // ------- DOWNLOAD BACKUP -------
-  const handleDownloadBackup = async (filename) => {
+  const handleDownloadBackup = (filename) => {
     try {
-      const res = await fetch(`${API_URL}/admin/backups/${encodeURIComponent(filename)}`, {
-        headers: { 'Authorization': `Bearer ${getToken()}` },
-      });
-      if (!res.ok) throw new Error();
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      const url = `${API_URL}/admin/backups/${encodeURIComponent(filename)}?token=${getToken()}`;
       const a = document.createElement('a');
       a.href = url;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
       toast.success('تم تحميل النسخة الاحتياطية');
     } catch {
       toast.error('فشل تحميل النسخة الاحتياطية');
@@ -339,11 +354,11 @@ export default function BackupPanel() {
           >
             <IconUploadCloud size={32} className={styles.uploadIcon} />
             <span className={styles.uploadLabel}>اضغط لاختيار ملف النسخة الاحتياطية</span>
-            <span className={styles.uploadHint}>JSON فقط • الحد الأقصى 50MB</span>
+            <span className={styles.uploadHint}>JSON أو DB • الحد الأقصى 50MB للـ JSON / 500MB للـ DB</span>
             <input
               ref={fileInputRef}
               type="file"
-              accept=".json,application/json"
+              accept=".json,.db,.sqlite,application/json"
               onChange={handleFileSelect}
               className={styles.fileInput}
               aria-label="اختيار ملف نسخة احتياطية"
@@ -362,95 +377,133 @@ export default function BackupPanel() {
         {/* Dry-run result */}
         {dryRunResult && importFile && !importSuccess && (
           <div className={styles.dryRunResult}>
-            {/* Meta info */}
-            <div className={styles.dryRunMeta}>
-              <div className={styles.dryRunMetaItem}>
-                <span className={styles.metaLabel}>تاريخ التصدير</span>
-                <span className={styles.metaValue}>{formatDate(dryRunResult.meta?.exportedAt)}</span>
-              </div>
-              <div className={styles.dryRunMetaItem}>
-                <span className={styles.metaLabel}>الإصدار</span>
-                <span className={styles.metaValue}>{dryRunResult.meta?.version || '—'}</span>
-              </div>
-              <div className={styles.dryRunMetaItem}>
-                <span className={styles.metaLabel}>حجم الملف</span>
-                <span className={styles.metaValue}>{formatFileSize(importFile.file.size)}</span>
-              </div>
-              <div className={styles.dryRunMetaItem}>
-                <span className={styles.metaLabel}>النطاق</span>
-                <span className={styles.metaValue}>{dryRunResult.meta?.scope === 'full' ? 'نسخة كاملة' : dryRunResult.meta?.scope}</span>
-              </div>
-            </div>
-
-            {/* Counts comparison table */}
-            {dryRunResult.valid && (
-              <div className={styles.countsTable}>
-                <div className={styles.countsHeader}>
-                  <span>الجدول</span>
-                  <span>الحالي</span>
-                  <span>في النسخة</span>
-                </div>
-                {Object.keys(TABLE_LABELS).map(table => (
-                  <div key={table} className={styles.countsRow}>
-                    <span className={styles.countLabel}>{TABLE_LABELS[table]}</span>
-                    <span className={styles.countCurrent}>{dryRunResult.currentCounts?.[table] ?? '—'}</span>
-                    <span className={styles.countImport}>{dryRunResult.importCounts?.[table] ?? '—'}</span>
+            {/* DB file info (no dry-run, just confirmation) */}
+            {dryRunResult.isDbFile ? (
+              <>
+                <div className={styles.dryRunMeta}>
+                  <div className={styles.dryRunMetaItem}>
+                    <span className={styles.metaLabel}>نوع الملف</span>
+                    <span className={styles.metaValue}>ملف قاعدة بيانات SQLite (.db)</span>
                   </div>
-                ))}
-              </div>
-            )}
+                  <div className={styles.dryRunMetaItem}>
+                    <span className={styles.metaLabel}>اسم الملف</span>
+                    <span className={styles.metaValue}>{importFile.file.name}</span>
+                  </div>
+                  <div className={styles.dryRunMetaItem}>
+                    <span className={styles.metaLabel}>حجم الملف</span>
+                    <span className={styles.metaValue}>{formatFileSize(importFile.file.size)}</span>
+                  </div>
+                </div>
+                <div className={styles.warningBanner}>
+                  <IconAlertCircle size={16} />
+                  <span>سيتم استبدال قاعدة البيانات بالكامل بهذا الملف. يتم حفظ نسخة احتياطية تلقائياً قبل الاستبدال.</span>
+                </div>
+                <div className={styles.importActions}>
+                  <Button variant="secondary" size="md" onClick={clearImport}>إلغاء</Button>
+                  <Button
+                    variant="danger"
+                    size="md"
+                    icon={IconRefresh}
+                    loading={importing}
+                    onClick={() => setConfirmImport(true)}
+                  >
+                    استعادة من ملف DB
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Meta info */}
+                <div className={styles.dryRunMeta}>
+                  <div className={styles.dryRunMetaItem}>
+                    <span className={styles.metaLabel}>تاريخ التصدير</span>
+                    <span className={styles.metaValue}>{formatDate(dryRunResult.meta?.exportedAt)}</span>
+                  </div>
+                  <div className={styles.dryRunMetaItem}>
+                    <span className={styles.metaLabel}>الإصدار</span>
+                    <span className={styles.metaValue}>{dryRunResult.meta?.version || '—'}</span>
+                  </div>
+                  <div className={styles.dryRunMetaItem}>
+                    <span className={styles.metaLabel}>حجم الملف</span>
+                    <span className={styles.metaValue}>{formatFileSize(importFile.file.size)}</span>
+                  </div>
+                  <div className={styles.dryRunMetaItem}>
+                    <span className={styles.metaLabel}>النطاق</span>
+                    <span className={styles.metaValue}>{dryRunResult.meta?.scope === 'full' ? 'نسخة كاملة' : dryRunResult.meta?.scope}</span>
+                  </div>
+                </div>
 
-            {/* Errors */}
-            {dryRunResult.errors?.length > 0 && (
-              <div className={styles.errorList}>
-                <h5 className={styles.issueTitle}>
-                  <IconAlertCircle size={14} /> أخطاء ({dryRunResult.errors.length})
-                </h5>
-                {dryRunResult.errors.map((err, i) => (
-                  <div key={i} className={styles.errorItem}>{err}</div>
-                ))}
-              </div>
-            )}
+                {/* Counts comparison table */}
+                {dryRunResult.valid && (
+                  <div className={styles.countsTable}>
+                    <div className={styles.countsHeader}>
+                      <span>الجدول</span>
+                      <span>الحالي</span>
+                      <span>في النسخة</span>
+                    </div>
+                    {Object.keys(TABLE_LABELS).map(table => (
+                      <div key={table} className={styles.countsRow}>
+                        <span className={styles.countLabel}>{TABLE_LABELS[table]}</span>
+                        <span className={styles.countCurrent}>{dryRunResult.currentCounts?.[table] ?? '—'}</span>
+                        <span className={styles.countImport}>{dryRunResult.importCounts?.[table] ?? '—'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-            {/* Warnings */}
-            {dryRunResult.warnings?.length > 0 && (
-              <div className={styles.warningList}>
-                <h5 className={styles.issueTitle}>
-                  <IconAlertCircle size={14} /> تحذيرات ({dryRunResult.warnings.length})
-                </h5>
-                {dryRunResult.warnings.map((w, i) => (
-                  <div key={i} className={styles.warningItem}>{w}</div>
-                ))}
-              </div>
-            )}
+                {/* Errors */}
+                {dryRunResult.errors?.length > 0 && (
+                  <div className={styles.errorList}>
+                    <h5 className={styles.issueTitle}>
+                      <IconAlertCircle size={14} /> أخطاء ({dryRunResult.errors.length})
+                    </h5>
+                    {dryRunResult.errors.map((err, i) => (
+                      <div key={i} className={styles.errorItem}>{err}</div>
+                    ))}
+                  </div>
+                )}
 
-            {/* Conflicts */}
-            {dryRunResult.conflicts?.length > 0 && (
-              <div className={styles.warningList}>
-                <h5 className={styles.issueTitle}>
-                  <IconAlertCircle size={14} /> تعارضات ({dryRunResult.conflicts.length})
-                </h5>
-                {dryRunResult.conflicts.map((c, i) => (
-                  <div key={i} className={styles.warningItem}>{c}</div>
-                ))}
-              </div>
-            )}
+                {/* Warnings */}
+                {dryRunResult.warnings?.length > 0 && (
+                  <div className={styles.warningList}>
+                    <h5 className={styles.issueTitle}>
+                      <IconAlertCircle size={14} /> تحذيرات ({dryRunResult.warnings.length})
+                    </h5>
+                    {dryRunResult.warnings.map((w, i) => (
+                      <div key={i} className={styles.warningItem}>{w}</div>
+                    ))}
+                  </div>
+                )}
 
-            {/* Actions */}
-            <div className={styles.importActions}>
-              <Button variant="secondary" size="md" onClick={clearImport}>إلغاء</Button>
-              {dryRunResult.valid && (
-                <Button
-                  variant="danger"
-                  size="md"
-                  icon={IconRefresh}
-                  loading={importing}
-                  onClick={() => setConfirmImport(true)}
-                >
-                  استعادة البيانات
-                </Button>
-              )}
-            </div>
+                {/* Conflicts */}
+                {dryRunResult.conflicts?.length > 0 && (
+                  <div className={styles.warningList}>
+                    <h5 className={styles.issueTitle}>
+                      <IconAlertCircle size={14} /> تعارضات ({dryRunResult.conflicts.length})
+                    </h5>
+                    {dryRunResult.conflicts.map((c, i) => (
+                      <div key={i} className={styles.warningItem}>{c}</div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className={styles.importActions}>
+                  <Button variant="secondary" size="md" onClick={clearImport}>إلغاء</Button>
+                  {dryRunResult.valid && (
+                    <Button
+                      variant="danger"
+                      size="md"
+                      icon={IconRefresh}
+                      loading={importing}
+                      onClick={() => setConfirmImport(true)}
+                    >
+                      استعادة البيانات
+                    </Button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -529,7 +582,7 @@ export default function BackupPanel() {
       <div className={styles.safetyInfo}>
         <div className={styles.safetyItem}>
           <IconShield size={15} />
-          <span>يتم إنشاء نسخة احتياطية تلقائياً قبل كل عملية استيراد</span>
+          <span>يتم إنشاء نسخة احتياطية (.db) تلقائياً قبل كل عملية استيراد</span>
         </div>
         <div className={styles.safetyItem}>
           <IconShield size={15} />
@@ -541,7 +594,11 @@ export default function BackupPanel() {
         </div>
         <div className={styles.safetyItem}>
           <IconShield size={15} />
-          <span>في حال فشل الاستيراد، يتم استعادة البيانات تلقائياً</span>
+          <span>استيراد JSON يتم داخل Transaction — في حال الفشل يتم التراجع تلقائياً ولا تتأثر البيانات</span>
+        </div>
+        <div className={styles.safetyItem}>
+          <IconShield size={15} />
+          <span>يتم تفعيل وضع الصيانة تلقائياً أثناء الاستيراد لمنع التعارضات</span>
         </div>
       </div>
 
