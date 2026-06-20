@@ -1,4 +1,4 @@
-.wrapper { display: flex; flex-direction: column; gap: var(--space-2); }
+.group { display: flex; flex-direction: column; gap: var(--space-2); }
 
 .label {
   display: block;
@@ -9,7 +9,7 @@
   padding-right: var(--space-0-5);
 }
 
-.inputWrap {
+.inputWrapper {
   position: relative;
   display: flex;
   align-items: center;
@@ -76,6 +76,6 @@
   pointer-events: none;
   transition: color var(--duration-normal);
 }
-.inputWrap:focus-within .iconSlot { color: var(--accent); }
+.inputWrapper:focus-within .iconSlot { color: var(--accent); }
 
 .error { font-size: var(--font-xs); color: var(--red); margin-top: var(--space-1); }

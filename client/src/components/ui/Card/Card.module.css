@@ -40,9 +40,28 @@
 .pad-md { padding: var(--space-6) var(--space-7); position: relative; z-index: 2; }
 .pad-lg { padding: var(--space-8) var(--space-10); position: relative; z-index: 2; }
 
-.hoverable:hover {
-  box-shadow: var(--shadow-glass-md);
-  transform: translateY(-2px) scale(1.005);
+.elevated {
+  box-shadow: var(--shadow-glass-lg);
+}
+
+.interactive {
+  transition: all var(--duration-normal) var(--ease-out);
+}
+.interactive:hover {
+  border-top-color: rgba(255, 255, 255, 0.28);
+  border-left-color: rgba(255, 255, 255, 0.16);
+  border-right-color: rgba(255, 255, 255, 0.16);
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35), var(--shadow-glass-md);
+  transform: translateY(-4px);
+}
+
+.clickable {
+  cursor: pointer;
+}
+.clickable:active {
+  transform: scale(0.985);
+  transition-duration: var(--duration-instant);
 }
 
 .animate {

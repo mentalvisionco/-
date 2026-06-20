@@ -103,3 +103,19 @@
   .toast { padding: var(--space-4); }
 }
 
+.progressBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  width: 100%;
+  animation: progressShrink var(--duration) linear forwards;
+  z-index: 3;
+  opacity: 0.8;
+}
+
+.success .progressBar { background: var(--green); }
+.error .progressBar { background: var(--red); }
+.warning .progressBar { background: var(--amber); }
+.info .progressBar { background: var(--blue); }
+

@@ -2,8 +2,8 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(var(--glass-blur-base));
-  -webkit-backdrop-filter: blur(var(--glass-blur-base));
+  -webkit-backdrop-filter: blur(20px) !important;
+  backdrop-filter: blur(20px) !important;
   z-index: var(--z-modal);
   display: flex;
   align-items: center;
@@ -12,15 +12,22 @@
   animation: overlayIn var(--duration-slow) var(--ease-out);
 }
 
+.overlayOut {
+  animation: overlayOut 300ms var(--ease-out) forwards;
+}
+
 @keyframes overlayIn {
-  from { opacity: 0; backdrop-filter: blur(0); }
-  to { opacity: 1; backdrop-filter: blur(var(--glass-blur-base)); }
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes overlayOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 .modal {
   background: var(--surface-glass-floating);
-  backdrop-filter: blur(var(--glass-blur-heavy));
-  -webkit-backdrop-filter: blur(var(--glass-blur-heavy));
   border-top: 1px solid var(--glass-border-top);
   border-left: 1px solid var(--glass-border-side);
   border-right: 1px solid var(--glass-border-side);
@@ -32,6 +39,10 @@
   position: relative;
   z-index: 1;
   animation: modalSpring var(--duration-slower) var(--ease-elastic);
+}
+
+.modalOut {
+  animation: slideOutDown 300ms var(--ease-out) forwards;
 }
 
 .modal::after {
@@ -73,15 +84,17 @@
   line-height: var(--leading-tight);
 }
 
-.close {
+.closeBtn {
   width: 34px; height: 34px;
   border-radius: var(--radius-md);
   display: flex; align-items: center; justify-content: center;
   color: var(--text-tertiary);
   transition: all var(--duration-normal) var(--ease-out);
   border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
 }
-.close:hover {
+.closeBtn:hover {
   background: var(--surface-glass-control);
   color: var(--text-primary);
   border-top-color: var(--glass-border-top);

@@ -17,8 +17,8 @@ export default function Input({
   return (
     <div className={`${styles.group} ${fullWidth ? styles.fullWidth : ''} ${className}`}>
       {label && <label htmlFor={inputId} className={styles.label}>{label}</label>}
-      <div className={`${styles.inputWrapper} ${error ? styles.hasError : ''} ${styles[size]}`}>
-        {Icon && <Icon size={16} className={styles.icon} />}
+      <div className={`${styles.inputWrapper} ${error ? styles.hasError : ''} ${styles[size]} ${Icon ? styles.hasIcon : ''}`}>
+        {Icon && <Icon size={16} className={styles.iconSlot} />}
         <input
           id={inputId}
           className={styles.input}
@@ -30,3 +30,4 @@ export default function Input({
     </div>
   );
 }
+

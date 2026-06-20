@@ -169,7 +169,8 @@ app.use(helmet({
       fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https://*", "blob:"],
       mediaSrc: ["'self'", "https://*", "blob:"],
-      connectSrc: ["'self'", "https://*", "http://localhost:*"]
+      connectSrc: ["'self'", "https://*", "http://localhost:*"],
+      frameSrc: ["'self'", "https://drive.google.com", "https://*.google.com", "https://www.youtube.com", "https://youtube.com", "https://*.youtube.com"]
     }
   },
   crossOriginEmbedderPolicy: false,
@@ -1029,12 +1030,12 @@ app.put('/api/admin/students/:id', authenticateToken, requireAdmin, (req, res) =
 
 app.post('/api/admin/lectures', authenticateToken, requireAdmin, (req, res) => {
   try {
-    const { title, description, materialUrl } = req.body;
+    const { title, description, materialUrl, videoUrl } = req.body;
     if (!title || !materialUrl) return res.status(400).json({ error: 'العنوان ورابط الماتيريال مطلوبان' });
 
-    const count = dbGet('SELECT COUNT(*) as c FROM lectures').c || 0;
-    const result = dbRun('INSERT INTO lectures (title, description, materialUrl, orderNum) VALUES (?, ?, ?, ?)',
-      [sanitize(title), sanitize(description), sanitize(materialUrl), count + 1]);
+    const maxOrder = dbGet('SELECT COALESCE(MAX(orderNum), 0) as m FROM lectures').m || 0;
+    const result = dbRun('INSERT INTO lectures (title, description, materialUrl, videoUrl, orderNum) VALUES (?, ?, ?, ?, ?)',
+      [sanitize(title), sanitize(description), sanitize(materialUrl), videoUrl ? sanitize(videoUrl) : null, maxOrder + 1]);
 
     // Auto-create attendance session linked to this lecture
     const lectureId = result.lastInsertRowid;
@@ -1045,7 +1046,7 @@ app.post('/api/admin/lectures', authenticateToken, requireAdmin, (req, res) => {
     );
 
     logAudit(req.user.id, 'lecture_create', { lectureId, title }, req);
-    res.json({ message: 'تمت إضافة المحاضرة وجلسة الحضور بنجاح' });
+    res.json({ message: 'تمت إضافة المحاضرة وجسة الحضور بنجاح' });
   } catch (err) {
     logger.error('Add lecture error: %s', err.stack);
     res.status(500).json({ error: 'حدث خطأ' });
@@ -1054,9 +1055,9 @@ app.post('/api/admin/lectures', authenticateToken, requireAdmin, (req, res) => {
 
 app.put('/api/admin/lectures/:id', authenticateToken, requireAdmin, (req, res) => {
   try {
-    const { title, description, materialUrl } = req.body;
-    dbRun('UPDATE lectures SET title = ?, description = ?, materialUrl = ? WHERE id = ?',
-      [sanitize(title), sanitize(description), sanitize(materialUrl), req.params.id]);
+    const { title, description, materialUrl, videoUrl } = req.body;
+    dbRun('UPDATE lectures SET title = ?, description = ?, materialUrl = ?, videoUrl = ? WHERE id = ?',
+      [sanitize(title), sanitize(description), sanitize(materialUrl), videoUrl ? sanitize(videoUrl) : null, req.params.id]);
 
     logAudit(req.user.id, 'lecture_update', { lectureId: req.params.id, title }, req);
     res.json({ message: 'تم التعديل بنجاح' });
@@ -1068,11 +1069,14 @@ app.put('/api/admin/lectures/:id', authenticateToken, requireAdmin, (req, res) =
 
 app.delete('/api/admin/lectures/:id', authenticateToken, requireAdmin, (req, res) => {
   try {
-    const lecture = dbGet('SELECT id, title FROM lectures WHERE id = ?', [req.params.id]);
+    const lecture = dbGet('SELECT id, title, orderNum FROM lectures WHERE id = ?', [req.params.id]);
     if (!lecture) return res.status(404).json({ error: 'المحاضرة غير موجودة' });
 
-    dbRun('DELETE FROM ratings WHERE lectureId = ?', [req.params.id]);
-    dbRun('DELETE FROM lectures WHERE id = ?', [req.params.id]);
+    dbTransaction(() => {
+      dbRun('DELETE FROM ratings WHERE lectureId = ?', [req.params.id]);
+      dbRun('DELETE FROM lectures WHERE id = ?', [req.params.id]);
+      dbRun('UPDATE lectures SET orderNum = orderNum - 1 WHERE orderNum > ?', [lecture.orderNum]);
+    });
 
     logAudit(req.user.id, 'lecture_delete', { lectureId: req.params.id, title: lecture.title }, req);
     res.json({ message: 'تم حذف المحاضرة بنجاح' });
@@ -1885,8 +1889,8 @@ app.post('/api/admin/import', authenticateToken, requireAdmin, express.json({ li
 
         for (const l of lectures) {
           dbRun(
-            'INSERT INTO lectures (id, title, description, materialUrl, orderNum, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-            [l.id, sanitizeBackupString(l.title), sanitizeBackupString(l.description), sanitizeBackupString(l.materialUrl), l.orderNum ?? 0, l.created_at ?? new Date().toISOString()]
+            'INSERT INTO lectures (id, title, description, materialUrl, videoUrl, orderNum, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [l.id, sanitizeBackupString(l.title), sanitizeBackupString(l.description), sanitizeBackupString(l.materialUrl), sanitizeBackupString(l.videoUrl) ?? null, l.orderNum ?? 0, l.created_at ?? new Date().toISOString()]
           );
         }
 

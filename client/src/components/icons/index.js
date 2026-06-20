@@ -412,3 +412,16 @@ export function IconXCircle(props) {
     <line x1="9" y1="9" x2="15" y2="15" />
   </>);
 }
+
+export function IconFilter(props) {
+  return iconBase(props, <>
+    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+  </>);
+}
+
+export function IconPlay(props) {
+  return iconBase(props, <>
+    <polygon points="5 3 19 12 5 21 5 3" />
+  </>);
+}
+

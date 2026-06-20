@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { apiCall } from '@/lib/api';
@@ -19,8 +19,9 @@ import EmptyState from '@/components/ui/EmptyState/EmptyState';
 import ConfirmDialog from '@/components/ui/ConfirmDialog/ConfirmDialog';
 import BackupPanel from '@/components/backup/BackupPanel/BackupPanel';
 import AttendancePanel from '@/components/attendance/AttendancePanel/AttendancePanel';
+import SubmissionItem from '@/components/tasks/SubmissionItem/SubmissionItem';
 import { SkeletonCard, SkeletonList, SkeletonTable } from '@/components/ui/Skeleton/Skeleton';
-import { IconDashboard, IconStudents, IconLectures, IconTasksAlt, IconPlus, IconEdit, IconTrash, IconSearch, IconExternalLink, IconStarFilled, IconEye, IconBarChart, IconFileText, IconSettings, IconClipboardCheck, IconUpload } from '@/components/icons';
+import { IconDashboard, IconStudents, IconLectures, IconTasksAlt, IconPlus, IconEdit, IconTrash, IconSearch, IconExternalLink, IconStarFilled, IconEye, IconBarChart, IconFileText, IconSettings, IconClipboardCheck, IconUpload, IconFilter } from '@/components/icons';
 import Image from 'next/image';
 import styles from './page.module.css';
 
@@ -45,6 +46,7 @@ export default function AdminDashboard() {
   const [lectures, setLectures] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('default');
 
   // Lecture form
   const [showLectureForm, setShowLectureForm] = useState(false);
@@ -52,6 +54,7 @@ export default function AdminDashboard() {
   const [formTitle, setFormTitle] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [formMaterialUrl, setFormMaterialUrl] = useState('');
+  const [formVideoUrl, setFormVideoUrl] = useState('');
 
   // Task form
   const [showTaskForm, setShowTaskForm] = useState(false);
@@ -90,16 +93,16 @@ export default function AdminDashboard() {
   }, [ready, isAdminOrViewer, logout, fetchData]);
 
   // ——— Lecture handlers ———
-  const openAddLecture = () => { setEditLectureId(null); setFormTitle(''); setFormDesc(''); setFormMaterialUrl(''); setShowLectureForm(true); };
-  const openEditLecture = (l) => { setEditLectureId(l.id); setFormTitle(l.title); setFormDesc(l.description || ''); setFormMaterialUrl(l.materialUrl || ''); setShowLectureForm(true); };
+  const openAddLecture = () => { setEditLectureId(null); setFormTitle(''); setFormDesc(''); setFormMaterialUrl(''); setFormVideoUrl(''); setShowLectureForm(true); };
+  const openEditLecture = (l) => { setEditLectureId(l.id); setFormTitle(l.title); setFormDesc(l.description || ''); setFormMaterialUrl(l.materialUrl || ''); setFormVideoUrl(l.videoUrl || ''); setShowLectureForm(true); };
   const handleSaveLecture = async (e) => {
     e.preventDefault();
     try {
       if (editLectureId) {
-        await apiCall(`/admin/lectures/${editLectureId}`, 'PUT', { title: formTitle, description: formDesc, materialUrl: formMaterialUrl });
+        await apiCall(`/admin/lectures/${editLectureId}`, 'PUT', { title: formTitle, description: formDesc, materialUrl: formMaterialUrl, videoUrl: formVideoUrl });
         toast.success('تم التعديل بنجاح');
       } else {
-        await apiCall('/admin/lectures', 'POST', { title: formTitle, description: formDesc, materialUrl: formMaterialUrl });
+        await apiCall('/admin/lectures', 'POST', { title: formTitle, description: formDesc, materialUrl: formMaterialUrl, videoUrl: formVideoUrl });
         toast.success('تمت الإضافة بنجاح');
       }
       setShowLectureForm(false); fetchData();
@@ -215,15 +218,54 @@ export default function AdminDashboard() {
     }
   };
 
-  if (!ready || !user) return null;
-
   const totalLectures = lectures.length || 1;
   const totalExpected = students.length * totalLectures;
   const avgEng = totalExpected > 0 ? Math.round((submissions.length / totalExpected) * 100) : 0;
 
-  const filteredStudents = students.filter(s =>
-    s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.username.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredStudents = useMemo(() => {
+    let result = [...students];
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(s =>
+        (s.name && s.name.toLowerCase().includes(q)) ||
+        (s.username && s.username.toLowerCase().includes(q))
+      );
+    }
+
+    switch (sortBy) {
+      case 'name-asc':
+        result.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ar'));
+        break;
+      case 'name-desc':
+        result.sort((a, b) => (b.name || '').localeCompare(a.name || '', 'ar'));
+        break;
+      case 'points-desc':
+        result.sort((a, b) => (b.points || 0) - (a.points || 0));
+        break;
+      case 'points-asc':
+        result.sort((a, b) => (a.points || 0) - (b.points || 0));
+        break;
+      case 'submissions-desc':
+        result.sort((a, b) => (b.submissionsCount || 0) - (a.submissionsCount || 0));
+        break;
+      case 'submissions-asc':
+        result.sort((a, b) => (a.submissionsCount || 0) - (b.submissionsCount || 0));
+        break;
+      case 'fillcard-desc':
+        result.sort((a, b) => (b.fill_card_count || 0) - (a.fill_card_count || 0));
+        break;
+      case 'fillcard-asc':
+        result.sort((a, b) => (a.fill_card_count || 0) - (b.fill_card_count || 0));
+        break;
+      default:
+        break;
+    }
+
+    return result;
+  }, [students, searchQuery, sortBy]);
+
+  if (!ready || !user) return null;
 
   const mobileHeader = (
     <div className={styles.mobileTop}>
@@ -260,19 +302,19 @@ export default function AdminDashboard() {
                         <strong>{sub.studentName}</strong>
                         <span className={styles.subTask}>{sub.taskTitle}</span>
                         {sub.uploadedFileName && (
-                          <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', display: 'block', marginTop: '2px' }}>
+                          <span className={styles.subFileText}>
                             الملف: {sub.uploadedFileName}
                           </span>
                         )}
                       </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div className={styles.latestSubActions}>
                         {sub.fileUrl && sub.fileUrl.startsWith('http') && (
                           <a href={sub.fileUrl} target="_blank" rel="noopener noreferrer" className={styles.subLink} title="عرض الرابط الخارجي">
                             <IconExternalLink size={14} /> رابط
                           </a>
                         )}
                         {sub.uploadedFileUrl && (
-                          <a href={sub.uploadedFileUrl} target="_blank" rel="noopener noreferrer" className={styles.subLink} style={{ background: 'var(--green)', color: 'white' }} title="عرض الملف المرفوع">
+                          <a href={sub.uploadedFileUrl} target="_blank" rel="noopener noreferrer" className={`${styles.subLink} ${styles.latestSubLinkFile}`} title="عرض الملف المرفوع">
                             <IconExternalLink size={14} /> ملف
                           </a>
                         )}
@@ -290,9 +332,28 @@ export default function AdminDashboard() {
       {currentView === 'students' && (
         <div className={styles.view} key="students">
           <Header title="قائمة المتدربين" subtitle="حساب التقييم بناءً على الحضور والتسليم">
-            <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
+            <div className={styles.headerActions}>
               <div className={styles.searchWrap}>
                 <Input icon={IconSearch} placeholder="بحث بالاسم أو اسم المستخدم..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} size="sm" />
+              </div>
+              <div className={styles.filterWrap}>
+                <IconFilter className={styles.filterIcon} size={14} />
+                <select 
+                  className={styles.sortSelect} 
+                  value={sortBy} 
+                  onChange={e => setSortBy(e.target.value)}
+                  aria-label="ترتيب الطلاب"
+                >
+                  <option value="default">الترتيب الافتراضي</option>
+                  <option value="name-asc">الاسم (أ - ي)</option>
+                  <option value="name-desc">الاسم (ي - أ)</option>
+                  <option value="points-desc">النقاط (الأعلى أولاً)</option>
+                  <option value="points-asc">النقاط (الأقل أولاً)</option>
+                  <option value="submissions-desc">التسليمات (الأكثر أولاً)</option>
+                  <option value="submissions-asc">التسليمات (الأقل أولاً)</option>
+                  <option value="fillcard-desc">الفيل كارد (الأكثر أولاً)</option>
+                  <option value="fillcard-asc">الفيل كارد (الأقل أولاً)</option>
+                </select>
               </div>
               {isAdmin && <Button variant="primary" size="md" icon={IconPlus} onClick={openAddStudent}>إضافة طالب</Button>}
             </div>
@@ -344,10 +405,10 @@ export default function AdminDashboard() {
                           <td>{s.submissionsCount} / {totalLectures}</td>
                           <td><Badge variant={variant}>{score} نقطة</Badge></td>
                           <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <button onClick={() => handleUpdateFillCard(s.id, 'decrement')} disabled={s.fill_card_count <= 0} style={{ padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--card-bg)' }}>-</button>
-                              <span style={{ minWidth: '20px', textAlign: 'center' }}>{s.fill_card_count || 0}</span>
-                              <button onClick={() => handleUpdateFillCard(s.id, 'increment')} disabled={s.fill_card_count >= 12} style={{ padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--card-bg)' }}>+</button>
+                            <div className={styles.fillCardEdit}>
+                              <button onClick={() => handleUpdateFillCard(s.id, 'decrement')} disabled={s.fill_card_count <= 0} className={styles.fillCardBtn}>-</button>
+                              <span className={styles.fillCardValue}>{s.fill_card_count || 0}</span>
+                              <button onClick={() => handleUpdateFillCard(s.id, 'increment')} disabled={s.fill_card_count >= 12} className={styles.fillCardBtn}>+</button>
                             </div>
                           </td>
                           {isAdmin && (
@@ -376,8 +437,8 @@ export default function AdminDashboard() {
 
           {showLectureForm && (
             <LectureForm
-              editId={editLectureId} title={formTitle} desc={formDesc} materialUrl={formMaterialUrl}
-              onTitleChange={setFormTitle} onDescChange={setFormDesc} onUrlChange={setFormMaterialUrl}
+              editId={editLectureId} title={formTitle} desc={formDesc} materialUrl={formMaterialUrl} videoUrl={formVideoUrl}
+              onTitleChange={setFormTitle} onDescChange={setFormDesc} onUrlChange={setFormMaterialUrl} onVideoUrlChange={setFormVideoUrl}
               onSave={handleSaveLecture} onCancel={() => setShowLectureForm(false)}
             />
           )}
@@ -501,216 +562,4 @@ export default function AdminDashboard() {
   );
 }
 
-function SubmissionItem({ sub, onGrade }) {
-  const [grade, setGrade] = useState(sub.grade ?? '');
-  const [feedback, setFeedback] = useState(sub.feedback ?? '');
-  const [file, setFile] = useState(null);
-  const [deleteFileFlag, setDeleteFileFlag] = useState(false);
-  const [saving, setSaving] = useState(false);
 
-  const hasExistingFile = !!sub.feedbackFileUrl && !deleteFileFlag;
-  const isChanged = 
-    grade !== (sub.grade ?? '') || 
-    feedback !== (sub.feedback ?? '') || 
-    file !== null || 
-    deleteFileFlag;
-
-  const handleSave = async () => {
-    const parsedGrade = parseInt(grade);
-    if (isNaN(parsedGrade) || parsedGrade < 0 || parsedGrade > 50) {
-      alert('التقييم يجب أن يكون بين 0 و 50');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const formData = new FormData();
-      formData.append('grade', parsedGrade);
-      formData.append('feedback', feedback);
-      if (file) {
-        formData.append('file', file);
-      }
-      if (deleteFileFlag) {
-        formData.append('deleteFeedbackFile', 'true');
-      }
-
-      await onGrade(sub.id, formData);
-      setFile(null);
-      setDeleteFileFlag(false);
-    } catch (err) {
-      // error is already handled
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Card padding="sm" className={styles.adminListItem}>
-      <div className={styles.adminItemInfo}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-          <strong style={{ fontSize: '16px', color: 'var(--text-primary)' }}>{sub.studentName}</strong>
-          <Badge variant={sub.grade !== null ? 'success' : 'warning'}>
-            {sub.grade !== null ? `تم التقييم: ${sub.grade}/50` : 'بانتظار التقييم'}
-          </Badge>
-        </div>
-        <p style={{ margin: '4px 0', color: 'var(--text-secondary)', fontSize: '14px' }}>{sub.taskTitle}</p>
-        
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '12px' }}>
-          {sub.fileUrl && sub.fileUrl.startsWith('http') && (
-            <a href={sub.fileUrl} target="_blank" rel="noopener noreferrer" className={styles.taskLink} style={{ margin: 0, padding: '4px 8px', fontSize: '13px' }}>
-              <IconExternalLink size={13} /> عرض الرابط الخارجي
-            </a>
-          )}
-          {sub.uploadedFileUrl && (
-            <a href={sub.uploadedFileUrl} target="_blank" rel="noopener noreferrer" className={styles.taskLink} style={{ color: 'var(--green)', margin: 0, padding: '4px 8px', fontSize: '13px' }}>
-              <IconExternalLink size={13} /> عرض الملف المرفوع ({sub.uploadedFileName || 'ملف'})
-            </a>
-          )}
-        </div>
-
-        {/* Existing Feedback File Section */}
-        {hasExistingFile && (
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginTop: '12px',
-            padding: '6px 12px',
-            background: 'var(--surface-2)',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--border-subtle)',
-            fontSize: '13px'
-          }}>
-            <span style={{ color: 'var(--text-tertiary)' }}>المرفق الحالي:</span>
-            <a href={sub.feedbackFileUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-text)', textDecoration: 'underline', fontWeight: '500' }}>
-              {sub.feedbackFileName || 'صورة التوضيح'}
-            </a>
-            <button 
-              type="button" 
-              onClick={() => setDeleteFileFlag(true)} 
-              title="حذف الملف المرفق" 
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--red)',
-                cursor: 'pointer',
-                padding: '2px',
-                display: 'inline-flex',
-                alignItems: 'center'
-              }}
-            >
-              <IconTrash size={14} />
-            </button>
-          </div>
-        )}
-      </div>
-
-      <div className={styles.adminItemActions} style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
-        alignItems: 'flex-start',
-        background: 'var(--surface-2)',
-        padding: '16px',
-        borderRadius: 'var(--radius-md)',
-        border: '1px solid var(--border-subtle)',
-        width: '100%',
-        maxWidth: '480px',
-        marginTop: '8px'
-      }}>
-        <div style={{ display: 'flex', gap: '12px', width: '100%', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ flex: '1', minWidth: '100px' }}>
-            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>الدرجة من 50</label>
-            <Input
-              type="number"
-              placeholder="الدرجة"
-              min="0"
-              max="50"
-              value={grade}
-              onChange={(e) => setGrade(e.target.value)}
-              style={{ width: '100%' }}
-            />
-          </div>
-          
-          <div style={{ flex: '2', minWidth: '200px' }}>
-            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>ملاحظات للطالب</label>
-            <Input
-              type="text"
-              placeholder="اكتب ملاحظات المعلم هنا..."
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
-              style={{ width: '100%' }}
-            />
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '12px' }}>
-          {/* File Upload Input */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input
-              type="file"
-              id={`feedback-file-${sub.id}`}
-              onChange={(e) => {
-                setFile(e.target.files[0] || null);
-                if (e.target.files[0]) {
-                  setDeleteFileFlag(false);
-                }
-              }}
-              style={{ display: 'none' }}
-              accept="image/*,.pdf"
-            />
-            <label
-              htmlFor={`feedback-file-${sub.id}`}
-              style={{
-                cursor: 'pointer',
-                border: '1px solid var(--border-default)',
-                background: 'var(--surface-1)',
-                padding: '6px 12px',
-                borderRadius: 'var(--radius-sm)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '13px',
-                fontWeight: '500'
-              }}
-            >
-              <IconUpload size={14} />
-              <span>{file ? 'تغيير الصورة' : 'إرفاق صورة...'}</span>
-            </label>
-            {file && (
-              <span style={{ fontSize: '12px', color: 'var(--text-primary)', maxWidth: '120px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={file.name}>
-                {file.name}
-              </span>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {isChanged && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  setGrade(sub.grade ?? '');
-                  setFeedback(sub.feedback ?? '');
-                  setFile(null);
-                  setDeleteFileFlag(false);
-                }}
-                disabled={saving}
-              >
-                إلغاء
-              </Button>
-            )}
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={!isChanged || saving}
-              onClick={handleSave}
-            >
-              {saving ? 'جاري الحفظ...' : 'حفظ التقييم'}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </Card>
-  );
-}

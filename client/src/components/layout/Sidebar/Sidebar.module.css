@@ -91,32 +91,34 @@
 .navLink.active {
   color: var(--text-primary);
   font-weight: var(--weight-semibold);
-  border-top-color: rgba(92, 214, 69, 0.25);
-  border-left-color: rgba(92, 214, 69, 0.15);
-  border-right-color: rgba(92, 214, 69, 0.15);
-  border-bottom-color: rgba(92, 214, 69, 0.05);
-  box-shadow: 0 4px 12px rgba(92, 214, 69, 0.06);
+  border-top-color: rgba(92, 214, 69, 0.28);
+  border-left-color: rgba(92, 214, 69, 0.16);
+  border-right-color: rgba(92, 214, 69, 0.16);
+  border-bottom-color: rgba(92, 214, 69, 0.08);
+  box-shadow: 0 4px 15px rgba(92, 214, 69, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.navLink.active::before { background: rgba(92, 214, 69, 0.12); }
+.navLink.active::before {
+  background: linear-gradient(90deg, rgba(92, 214, 69, 0.16) 0%, rgba(92, 214, 69, 0.03) 100%);
+}
 
 .navLink.active::after {
   content: '';
   position: absolute;
-  right: calc(-1 * var(--space-6));
+  right: 6px;
   top: 50%;
   transform: translateY(-50%);
-  width: 3px;
-  height: 20px;
+  width: 4px;
+  height: 18px;
   background: var(--accent);
-  border-radius: 2px;
-  box-shadow: 0 0 16px var(--accent);
+  border-radius: var(--radius-full);
+  box-shadow: 0 0 12px var(--accent), 0 0 4px var(--accent);
   animation: indicatorIn var(--duration-slow) var(--ease-spring);
 }
 
 @keyframes indicatorIn {
   from { height: 0; opacity: 0; }
-  to { height: 20px; opacity: 1; }
+  to { height: 18px; opacity: 1; }
 }
 
 .navIcon {

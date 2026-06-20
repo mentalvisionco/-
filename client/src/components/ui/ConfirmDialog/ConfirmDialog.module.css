@@ -14,6 +14,12 @@
   align-items: center;
   justify-content: center;
   margin-bottom: var(--space-1);
+  animation: pulseRotate 2.5s ease-in-out infinite;
+}
+
+@keyframes pulseRotate {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.08) rotate(3deg); }
 }
 .iconWrap.danger {
   background: rgba(239, 68, 68, 0.12);

@@ -31,6 +31,7 @@ async function setupDB() {
       title TEXT NOT NULL,
       description TEXT,
       materialUrl TEXT,
+      videoUrl TEXT,
       orderNum INTEGER,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -137,6 +138,14 @@ async function setupDB() {
     // Column already exists or table doesn't exist yet
   }
 
+  // Migrate existing database to add videoUrl if it doesn't exist
+  try {
+    db.exec('ALTER TABLE lectures ADD COLUMN videoUrl TEXT');
+    console.log('✅ Added videoUrl column to lectures');
+  } catch (err) {
+    // Column already exists or table doesn't exist yet
+  }
+
   // Migrate existing database to add fill_card_count if it doesn't exist
   try {
     db.exec('ALTER TABLE users ADD COLUMN fill_card_count INTEGER DEFAULT 0');
@@ -214,6 +223,21 @@ async function setupDB() {
       insertLec.run(...lec);
     }
     console.log('✅ Default lectures created');
+  }
+
+  // Fix and compact lecture orderNum values (remove gaps)
+  try {
+    const lecturesList = db.prepare('SELECT id FROM lectures ORDER BY orderNum ASC, id ASC').all();
+    const updateStmt = db.prepare('UPDATE lectures SET orderNum = ? WHERE id = ?');
+    const transaction = db.transaction(() => {
+      lecturesList.forEach((lec, idx) => {
+        updateStmt.run(idx + 1, lec.id);
+      });
+    });
+    transaction();
+    console.log('✅ Compacted lecture orderNum sequences successfully');
+  } catch (err) {
+    console.error('Failed to compact lecture orderNum sequence:', err.message);
   }
 
   return db;

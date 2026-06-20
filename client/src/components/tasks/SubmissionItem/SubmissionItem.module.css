@@ -1,0 +1,215 @@
+.submissionCard {
+  background: var(--surface-glass-base);
+  backdrop-filter: blur(var(--glass-blur-base));
+  -webkit-backdrop-filter: blur(var(--glass-blur-base));
+  border-top: 1px solid var(--glass-border-top);
+  border-left: 1px solid var(--glass-border-side);
+  border-right: 1px solid var(--glass-border-side);
+  border-bottom: 1px solid var(--glass-border-bottom);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  transition: border-color var(--duration-normal), box-shadow var(--duration-normal);
+}
+
+.submissionCard:hover {
+  border-top-color: rgba(255, 255, 255, 0.24);
+  border-left-color: rgba(255, 255, 255, 0.14);
+  border-right-color: rgba(255, 255, 255, 0.14);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  box-shadow: var(--shadow-glass-md);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-1);
+}
+
+.studentName {
+  font-size: var(--font-lg);
+  color: var(--text-primary);
+  font-weight: var(--weight-bold);
+}
+
+.taskTitle {
+  margin: var(--space-1) 0;
+  color: var(--text-secondary);
+  font-size: var(--font-base);
+}
+
+.links {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  font-size: var(--font-sm);
+  color: var(--accent-text);
+  padding: var(--space-1) var(--space-3);
+  background: rgba(92, 214, 69, 0.06);
+  border: 1px solid rgba(92, 214, 69, 0.15);
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-normal);
+  text-decoration: none;
+  font-weight: var(--weight-medium);
+}
+
+.link:hover {
+  background: rgba(92, 214, 69, 0.12);
+  border-color: rgba(92, 214, 69, 0.3);
+  box-shadow: 0 0 10px rgba(92, 214, 69, 0.15);
+}
+
+.uploadedFile {
+  color: var(--blue);
+  background: rgba(75, 131, 240, 0.06);
+  border-color: rgba(75, 131, 240, 0.15);
+}
+
+.uploadedFile:hover {
+  background: rgba(75, 131, 240, 0.12);
+  border-color: rgba(75, 131, 240, 0.3);
+  box-shadow: 0 0 10px rgba(75, 131, 240, 0.15);
+}
+
+.attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-1-5) var(--space-3);
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  font-size: var(--font-sm);
+}
+
+.attachmentLabel {
+  color: var(--text-tertiary);
+}
+
+.attachmentLink {
+  color: var(--accent-text);
+  text-decoration: underline;
+  font-weight: var(--weight-medium);
+}
+
+.deleteBtn {
+  background: none;
+  border: none;
+  color: var(--red);
+  cursor: pointer;
+  padding: var(--space-0-5);
+  display: inline-flex;
+  align-items: center;
+  transition: opacity var(--duration-fast);
+}
+
+.deleteBtn:hover {
+  opacity: 0.8;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+  background: var(--surface-1);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  width: 100%;
+  max-width: 520px;
+  margin-top: var(--space-2);
+}
+
+.formFields {
+  display: flex;
+  gap: var(--space-3);
+  width: 100%;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.fieldWrap {
+  flex: 1;
+  min-width: 100px;
+}
+
+.fieldWrapFeedback {
+  flex: 2.5;
+  min-width: 200px;
+}
+
+.fieldLabel {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  display: block;
+  margin-bottom: var(--space-1);
+  font-weight: var(--weight-medium);
+}
+
+.gradeInput, .feedbackInput {
+  width: 100%;
+}
+
+.formFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+}
+
+.uploadArea {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.uploadBtn {
+  cursor: pointer;
+  border: 1px solid var(--border-default);
+  background: var(--surface-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-medium);
+  transition: all var(--duration-normal);
+}
+
+.uploadBtn:hover {
+  background: var(--surface-3);
+  border-color: var(--border-hover);
+}
+
+.fileName {
+  font-size: var(--font-xs);
+  color: var(--text-primary);
+  max-width: 140px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.buttonGroup {
+  display: flex;
+  gap: var(--space-2);
+}

@@ -2,8 +2,10 @@
 import styles from './MobileNav.module.css';
 
 export default function MobileNav({ navItems = [], currentView, onViewChange }) {
+  const isScrollable = navItems.length > 5;
+  
   return (
-    <nav className={styles.nav}>
+    <nav className={`${styles.nav} ${isScrollable ? styles.scrollable : ''}`}>
       {navItems.map(item => (
         <button
           key={item.id}
@@ -17,3 +19,4 @@ export default function MobileNav({ navItems = [], currentView, onViewChange }) 
     </nav>
   );
 }
+

@@ -265,6 +265,8 @@
   .statsGrid { grid-template-columns: 1fr; gap: var(--space-4); margin-bottom: var(--space-8); }
   .sectionTitle { margin-bottom: var(--space-4); }
   .searchWrap { width: 100%; }
+  .filterWrap { width: 100%; }
+  .sortSelect { width: 100%; }
   .adminListItem { flex-direction: column; align-items: flex-start; gap: var(--space-4); padding: var(--space-5) var(--space-5) !important; }
   .adminItemActions { width: 100%; }
   
@@ -307,3 +309,136 @@
   .table td:first-child { margin-bottom: var(--space-2); border-bottom: 1px solid var(--glass-border-bottom) !important; padding-bottom: var(--space-3) !important; }
   .actionsCell { margin-top: var(--space-3); justify-content: flex-end; }
 }
+
+/* Helper classes for refactoring page.js inline styles */
+.headerActions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.filterWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.filterIcon {
+  position: absolute;
+  right: 12px;
+  color: var(--text-tertiary);
+  pointer-events: none;
+  transition: color var(--duration-normal);
+  z-index: 1;
+}
+
+.filterWrap:focus-within .filterIcon {
+  color: var(--accent);
+}
+
+.sortSelect {
+  height: 34px;
+  padding: 0 34px 0 28px;
+  background: var(--surface-glass-control);
+  backdrop-filter: blur(var(--glass-blur-light));
+  -webkit-backdrop-filter: blur(var(--glass-blur-light));
+  border-top: 1px solid var(--glass-border-top);
+  border-left: 1px solid var(--glass-border-side);
+  border-right: 1px solid var(--glass-border-side);
+  border-bottom: 1px solid var(--glass-border-bottom);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--font-sm);
+  cursor: pointer;
+  outline: none;
+  transition: all var(--duration-normal) var(--ease-out);
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(255,255,255,0.6)'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left 10px center;
+  background-size: 14px;
+}
+
+.sortSelect:hover:not(:disabled) {
+  border-top-color: rgba(255, 255, 255, 0.28);
+  border-left-color: rgba(255, 255, 255, 0.16);
+  border-right-color: rgba(255, 255, 255, 0.16);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.sortSelect:focus {
+  border-top-color: rgba(92, 214, 69, 0.4);
+  border-left-color: rgba(92, 214, 69, 0.25);
+  border-right-color: rgba(92, 214, 69, 0.25);
+  border-bottom-color: rgba(92, 214, 69, 0.1);
+  box-shadow: 0 0 16px rgba(92, 214, 69, 0.2);
+  background-color: rgba(92, 214, 69, 0.03);
+}
+
+.sortSelect option {
+  background: #121824;
+  color: var(--text-primary);
+  padding: var(--space-2);
+}
+
+.fillCardEdit {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.fillCardBtn {
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-default);
+  background: var(--surface-glass-control);
+  color: var(--text-primary);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.fillCardBtn:hover:not(:disabled) {
+  background: var(--surface-3);
+  border-color: var(--border-hover);
+}
+
+.fillCardBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.fillCardValue {
+  min-width: 20px;
+  text-align: center;
+  font-weight: var(--weight-bold);
+}
+
+.latestSubActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.latestSubLinkFile {
+  background: rgba(92, 214, 69, 0.15) !important;
+  color: var(--accent) !important;
+  border-color: rgba(92, 214, 69, 0.25) !important;
+}
+
+.latestSubLinkFile:hover {
+  background: var(--accent) !important;
+  color: var(--surface-0) !important;
+}
+
+.subFileText {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  display: block;
+  margin-top: 2px;
+}
+

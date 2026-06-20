@@ -18,7 +18,7 @@ export function ToastProvider({ children }) {
 
   const addToast = useCallback((message, type = 'success', duration = 3500) => {
     const id = ++toastId;
-    setToasts(prev => [...prev, { id, message, type, exiting: false }]);
+    setToasts(prev => [...prev, { id, message, type, duration, exiting: false }]);
     setTimeout(() => removeToast(id), duration);
     return id;
   }, [removeToast]);
@@ -42,6 +42,7 @@ export function ToastProvider({ children }) {
           >
             <span className={styles.indicator} />
             <span className={styles.message}>{t.message}</span>
+            <div className={styles.progressBar} style={{ '--duration': `${t.duration}ms` }} />
           </div>
         ))}
       </div>

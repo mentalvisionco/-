@@ -11,7 +11,7 @@ export default function EmptyState({
   className = '',
 }) {
   return (
-    <div className={`${styles.empty} ${className}`}>
+    <div className={`${styles.wrapper} ${className}`}>
       {Icon && (
         <div className={styles.iconWrap}>
           <Icon size={40} />
@@ -20,7 +20,7 @@ export default function EmptyState({
       {title && <h4 className={styles.title}>{title}</h4>}
       {description && <p className={styles.description}>{description}</p>}
       {actionLabel && onAction && (
-        <Button variant="secondary" size="sm" onClick={onAction} style={{ marginTop: 'var(--space-2)' }}>
+        <Button variant="secondary" size="sm" onClick={onAction} className={styles.actionBtn}>
           {actionLabel}
         </Button>
       )}

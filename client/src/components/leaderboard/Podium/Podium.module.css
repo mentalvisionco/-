@@ -96,4 +96,7 @@
 @media (max-width: 640px) {
   .grid { grid-template-columns: 1fr; gap: var(--space-4); }
   .gold, .silver, .bronze { min-height: auto; padding: var(--space-6) var(--space-5); }
+  .gold { order: 1; }
+  .silver { order: 2; }
+  .bronze { order: 3; }
 }

@@ -30,7 +30,7 @@
 }
 
 /* ——— Variants ——— */
-.default {
+.default, .neutral {
   background: rgba(255, 255, 255, 0.06);
   color: var(--text-secondary);
   border-top-color: rgba(255, 255, 255, 0.12);

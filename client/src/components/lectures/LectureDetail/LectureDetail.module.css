@@ -93,7 +93,114 @@
   line-height: var(--leading-tight);
 }
 
+/* Video Section styling */
+.videoSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+}
+
+.videoHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.videoIcon {
+  font-size: var(--font-lg);
+}
+
+.videoTitle {
+  font-size: var(--font-lg);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+}
+
+.playerContainer {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000000;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--glass-border-side);
+  position: relative;
+  transition: transform var(--duration-normal), box-shadow var(--duration-normal);
+}
+
+.playerContainer:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+
+.videoIframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.videoPlayer {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.externalVideoCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--space-6);
+  background: var(--surface-glass-base);
+  backdrop-filter: blur(var(--glass-blur-base));
+  -webkit-backdrop-filter: blur(var(--glass-blur-base));
+  border: 1px solid var(--glass-border-side);
+  border-radius: var(--radius-lg);
+  transition: all var(--duration-normal);
+}
+
+.externalVideoInfo {
+  flex: 1;
+}
+
+.externalVideoInfo p {
+  font-size: var(--font-base);
+  color: var(--text-secondary);
+  line-height: var(--leading-normal);
+}
+
+.watchBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  background: var(--accent);
+  color: var(--surface-0);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  font-size: var(--font-base);
+  font-weight: var(--weight-semibold);
+  transition: all var(--duration-normal);
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: var(--shadow-glow-accent);
+}
+
+.watchBtn:hover {
+  background: transparent;
+  color: var(--accent);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.watchBtn:active {
+  transform: scale(0.97);
+}
+
 @media (max-width: 640px) {
   .materialSection { flex-direction: column; text-align: center; gap: var(--space-4); padding: var(--space-5); }
   .materialLink { width: 100%; justify-content: center; }
+  .externalVideoCard { flex-direction: column; text-align: center; gap: var(--space-4); padding: var(--space-5); }
+  .watchBtn { width: 100%; justify-content: center; }
 }

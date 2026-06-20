@@ -132,9 +132,9 @@
 
 .studentRow {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
   padding: var(--space-4) var(--space-5);
   background: var(--surface-glass-base);
   backdrop-filter: blur(var(--glass-blur-base));
@@ -146,6 +146,13 @@
   border-radius: var(--radius-lg);
   transition: all var(--duration-normal) var(--ease-out);
   animation: staggerFadeUp var(--duration-slow) var(--ease-out) both;
+}
+
+.rowMain {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
 }
 
 .studentRow:hover {
@@ -321,6 +328,47 @@
   font-weight: var(--weight-medium);
 }
 
+.absenceNoteField {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: var(--space-1);
+}
+
+.absenceNoteLabel {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.absenceNoteInput {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-sm);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+  transition: all var(--duration-normal) var(--ease-out);
+}
+
+.absenceNoteInput:focus {
+  outline: none;
+  border-top-color: rgba(239, 68, 68, 0.4);
+  border-left-color: rgba(239, 68, 68, 0.25);
+  border-right-color: rgba(239, 68, 68, 0.25);
+  border-bottom-color: rgba(239, 68, 68, 0.1);
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.02);
+}
+
+.absenceNoteInput:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* ——— Responsive ——— */
 @media (max-width: 768px) {
   .sessionHeader {
@@ -354,6 +402,12 @@
     align-items: stretch;
     gap: var(--space-3);
     padding: var(--space-4);
+  }
+
+  .rowMain {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
   }
 
   .statusToggle {

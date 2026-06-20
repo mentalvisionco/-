@@ -204,11 +204,12 @@ export default function AttendanceMarking({ sessionId, onBack }) {
           const studentNote = notes[student.id] || '';
           const initials = student.name ? student.name.substring(0, 2) : 'ط';
           return (
-            <div key={student.id} style={{ display: 'flex', flexDirection: 'column' }}>
-              <div
-                className={`${styles.studentRow} ${status === 'present' ? styles.statusPresent : status === 'late' ? styles.statusLate : styles.statusAbsent}`}
-                style={{ animationDelay: `${Math.min(idx * 30, 300)}ms` }}
-              >
+            <div
+              key={student.id}
+              className={`${styles.studentRow} ${status === 'present' ? styles.statusPresent : status === 'late' ? styles.statusLate : styles.statusAbsent}`}
+              style={{ animationDelay: `${Math.min(idx * 30, 300)}ms` }}
+            >
+              <div className={styles.rowMain}>
                 <div className={styles.studentInfo}>
                   <div className={styles.avatar}>{initials}</div>
                   <div>
@@ -249,15 +250,15 @@ export default function AttendanceMarking({ sessionId, onBack }) {
               </div>
 
               {status === 'absent' && (
-                <div style={{ padding: '0 12px 12px', background: 'var(--card-bg)', borderBottom: '1px solid var(--border-color)', borderLeft: '1px solid var(--border-color)', borderRight: '1px solid var(--border-color)', borderBottomLeftRadius: 'var(--radius-md)', borderBottomRightRadius: 'var(--radius-md)', marginTop: '-12px', marginBottom: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>ملاحظة الغياب:</span>
+                <div className={styles.absenceNoteField}>
+                  <span className={styles.absenceNoteLabel}>ملاحظة الغياب:</span>
                   <input
                     type="text"
                     value={studentNote}
                     onChange={(e) => setStudentNote(student.id, e.target.value)}
                     placeholder="سبب الغياب (اختياري)..."
                     disabled={session.isLocked}
-                    style={{ flex: 1, padding: '6px 12px', fontSize: '13px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }}
+                    className={styles.absenceNoteInput}
                   />
                 </div>
               )}

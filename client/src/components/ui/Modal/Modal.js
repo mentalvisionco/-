@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import styles from './Modal.module.css';
 import { IconClose } from '@/components/icons';
@@ -13,27 +13,40 @@ export default function Modal({
   showClose = true,
   className = '',
 }) {
+  const [shouldRender, setShouldRender] = useState(isOpen);
+  const [isAnimatingOut, setIsAnimatingOut] = useState(false);
+
   const handleEsc = useCallback((e) => {
     if (e.key === 'Escape') onClose?.();
   }, [onClose]);
 
   useEffect(() => {
     if (isOpen) {
+      setShouldRender(true);
+      setIsAnimatingOut(false);
       document.addEventListener('keydown', handleEsc);
       document.body.style.overflow = 'hidden';
+    } else if (shouldRender) {
+      setIsAnimatingOut(true);
+      const timer = setTimeout(() => {
+        setShouldRender(false);
+        setIsAnimatingOut(false);
+      }, 300); // matching exit animation duration
+      return () => clearTimeout(timer);
     }
+
     return () => {
       document.removeEventListener('keydown', handleEsc);
       document.body.style.overflow = '';
     };
-  }, [isOpen, handleEsc]);
+  }, [isOpen, shouldRender, handleEsc]);
 
-  if (!isOpen) return null;
+  if (!shouldRender) return null;
 
   const modal = (
-    <div className={styles.overlay} onClick={onClose}>
+    <div className={`${styles.overlay} ${isAnimatingOut ? styles.overlayOut : ''}`} onClick={onClose}>
       <div
-        className={`${styles.modal} ${styles[size]} ${className}`}
+        className={`${styles.modal} ${styles[size]} ${isAnimatingOut ? styles.modalOut : ''} ${className}`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -59,3 +72,4 @@ export default function Modal({
   if (typeof window === 'undefined') return null;
   return createPortal(modal, document.body);
 }
+

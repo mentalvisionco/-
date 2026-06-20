@@ -1,12 +1,15 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import styles from './TaskCard.module.css';
 import Badge from '@/components/ui/Badge/Badge';
 import Button from '@/components/ui/Button/Button';
 import Input from '@/components/ui/Input/Input';
 import ProgressBar from '@/components/ui/ProgressBar/ProgressBar';
-import { IconExternalLink, IconCheck, IconUpload, IconTrash } from '@/components/icons';
+import { IconExternalLink, IconCheck, IconUpload, IconTrash, IconUploadCloud, IconFileText, IconLink, IconDownload, IconClose } from '@/components/icons';
 import { getToken, API_URL } from '@/lib/api';
+
+const MAX_FILE_SIZE = 600 * 1024 * 1024; // 600MB — matches server limit
+const ACCEPTED_TYPES = '.pdf,.doc,.docx,.png,.jpg,.jpeg,.zip,.rar,.psd,.psb,.ai,.eps';
 
 export default function TaskCard({ task, submission, onSubmit, onCancel }) {
   const isCompleted = !!submission;
@@ -16,6 +19,53 @@ export default function TaskCard({ task, submission, onSubmit, onCancel }) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [file, setFile] = useState(null);
   const [error, setError] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const handleFileSelect = (selectedFile) => {
+    if (!selectedFile) return;
+    if (selectedFile.size > MAX_FILE_SIZE) {
+      setError(`حجم الملف (${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB) يتجاوز الحد الأقصى المسموح به (600 MB).`);
+      setFile(null);
+      return;
+    }
+    setFile(selectedFile);
+    setError('');
+  };
+
+  const handleRemoveFile = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set dragging false if we're leaving the dropzone itself
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const droppedFile = e.dataTransfer?.files?.[0];
+    if (droppedFile) {
+      handleFileSelect(droppedFile);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -43,6 +93,9 @@ export default function TaskCard({ task, submission, onSubmit, onCancel }) {
         }
       });
       setFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     } catch (err) {
       setError(err.message || 'حدث خطأ أثناء التسليم');
     } finally {
@@ -54,6 +107,7 @@ export default function TaskCard({ task, submission, onSubmit, onCancel }) {
 
   return (
     <div className={`${styles.card} ${isCompleted ? styles.completed : ''}`}>
+      {/* ——— Header ——— */}
       <div className={styles.header}>
         <div className={styles.info}>
           <h4 className={styles.title}>{task.title}</h4>
@@ -64,79 +118,77 @@ export default function TaskCard({ task, submission, onSubmit, onCancel }) {
         </Badge>
       </div>
 
+      {/* ——— Task Details Button ——— */}
       <a href={task.taskUrl} target="_blank" rel="noopener noreferrer" className={styles.taskLink}>
         <IconExternalLink size={14} />
         <span>عرض تفاصيل المهمة</span>
       </a>
 
+      {/* ——— Current Submission Details ——— */}
       {isCompleted && (
-        <div style={{
-          background: 'var(--surface-2)',
-          padding: '16px',
-          borderRadius: 'var(--radius-lg)',
-          border: '1px dashed var(--border-subtle)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px',
-          fontSize: '14px',
-          marginTop: '4px'
-        }}>
-          <strong style={{ color: 'var(--text-primary)', fontSize: '15px' }}>التسليم الحالي:</strong>
+        <div className={styles.subDetailBox}>
+          <strong className={styles.subDetailTitle}>التسليم الحالي:</strong>
 
+          {/* Submitted URL card */}
           {submission.fileUrl && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ color: 'var(--text-tertiary)', minWidth: '80px' }}>الرابط:</span>
-              <a href={submission.fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-text)', wordBreak: 'break-all', textDecoration: 'underline', fontWeight: '500' }}>
-                {submission.fileUrl}
+            <div className={styles.subItemCard}>
+              <div className={`${styles.subItemIcon} ${styles.subItemIconLink}`}>
+                <IconLink size={18} />
+              </div>
+              <div className={styles.subItemInfo}>
+                <span className={styles.subItemLabel}>رابط الإنجاز</span>
+                <span className={styles.subItemValue} title={submission.fileUrl}>
+                  {submission.fileUrl}
+                </span>
+              </div>
+              <a
+                href={submission.fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${styles.subItemBtn} ${styles.subItemBtnLink}`}
+              >
+                <IconExternalLink size={12} />
+                <span>فتح الرابط</span>
               </a>
             </div>
           )}
 
+          {/* Divider between items */}
+          {submission.fileUrl && submission.uploadedFileUrl && (
+            <hr className={styles.subDivider} />
+          )}
+
+          {/* Uploaded file card */}
           {submission.uploadedFileUrl && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ color: 'var(--text-tertiary)', minWidth: '80px' }}>الملف المرفوع:</span>
-                <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{submission.uploadedFileName}</span>
+            <div className={styles.subItemCard}>
+              <div className={`${styles.subItemIcon} ${styles.subItemIconFile}`}>
+                <IconFileText size={18} />
+              </div>
+              <div className={styles.subItemInfo}>
+                <span className={styles.subItemLabel}>الملف المرفوع</span>
+                <span className={styles.subItemValue} title={submission.uploadedFileName}>
+                  {submission.uploadedFileName}
+                </span>
               </div>
               <a
                 href={submission.uploadedFileUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={styles.taskLink}
-                style={{
-                  background: 'var(--accent-muted)',
-                  padding: '6px 12px',
-                  borderRadius: 'var(--radius-md)',
-                  fontSize: '13px',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  margin: 0,
-                  border: '1px solid var(--accent-subtle)'
-                }}
+                className={`${styles.subItemBtn} ${styles.subItemBtnFile}`}
               >
-                <IconExternalLink size={13} />
-                <span>فتح / تحميل الملف</span>
+                <IconDownload size={12} />
+                <span>تحميل الملف</span>
               </a>
             </div>
           )}
 
           {/* Teacher Feedback / Notes & Image Section */}
           {(submission.feedback || submission.feedbackFileUrl) && (
-            <div style={{
-              marginTop: '12px',
-              padding: '16px',
-              background: 'var(--accent-muted)',
-              borderRadius: 'var(--radius-md)',
-              borderRight: '4px solid var(--accent)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '10px'
-            }}>
+            <div className={styles.feedbackBox}>
               {submission.feedback && (
                 <div>
-                  <strong style={{ display: 'block', color: 'var(--accent-text)', marginBottom: '4px', fontSize: '14px' }}>ملاحظات المعلم:</strong>
-                  <p style={{ margin: 0, color: 'var(--text-primary)', fontSize: '13.5px', lineHeight: '1.6' }}>{submission.feedback}</p>
+                  <strong className={styles.feedbackTitle}>ملاحظات المعلم:</strong>
+                  <p className={styles.feedbackText}>{submission.feedback}</p>
                 </div>
               )}
               {submission.feedbackFileUrl && (() => {
@@ -152,23 +204,14 @@ export default function TaskCard({ task, submission, onSubmit, onCancel }) {
                   : submission.feedbackFileUrl;
 
                 return (
-                  <div style={{ marginTop: submission.feedback ? '4px' : '0' }}>
-                    <span style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '8px', fontWeight: '500' }}>الصورة التوضيحية المرفقة من المعلم:</span>
-                    <a href={displayUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', maxWidth: '100%' }}>
+                  <div className={submission.feedback ? styles.feedbackFileSection : ''}>
+                    <span className={styles.feedbackFileLabel}>الصورة التوضيحية المرفقة من المعلم:</span>
+                    <a href={displayUrl} target="_blank" rel="noopener noreferrer" className={styles.feedbackImgLink}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img 
                         src={displayUrl} 
                         alt="توضيح المعلم" 
-                        style={{
-                          maxWidth: '100%',
-                          maxHeight: '320px',
-                          borderRadius: 'var(--radius-sm)',
-                          border: '1px solid var(--border-subtle)',
-                          boxShadow: 'var(--shadow-sm)',
-                          cursor: 'zoom-in',
-                          objectFit: 'contain',
-                          background: 'var(--surface-3)'
-                        }} 
+                        className={styles.feedbackImg}
                       />
                     </a>
                   </div>
@@ -180,11 +223,12 @@ export default function TaskCard({ task, submission, onSubmit, onCancel }) {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className={styles.form} style={{ display: 'flex', flexDirection: 'column', gap: '20px', alignItems: 'stretch' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', width: '100%', alignItems: 'start' }}>
+      {/* ——— Submission Form ——— */}
+      <form onSubmit={handleSubmit} className={styles.form}>
+        <div className={styles.formFieldsGrid}>
 
           {/* External Link URL Input */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div className={styles.formFieldWrapper}>
             <Input
               label="رابط الإنجاز (امتحان Google Forms)"
               type="url"
@@ -195,63 +239,71 @@ export default function TaskCard({ task, submission, onSubmit, onCancel }) {
             />
           </div>
 
-          {/* File Upload Input */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+          {/* File Upload Dropzone */}
+          <div className={styles.formFieldWrapper}>
+            <label className={styles.fieldLabel}>
               تحميل ملف (PDF, DOCX, ZIP, RAR, صور, PSD, AI)
             </label>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px' }}>
+            <div
+              className={`${styles.dropzone} ${isDragging ? styles.dropzoneDragging : ''}`}
+              onDragOver={handleDragOver}
+              onDragEnter={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              role="button"
+              tabIndex={0}
+              aria-label="منطقة رفع الملفات — اسحب ملفاً هنا أو اضغط للاختيار"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
+            >
               <input
                 type="file"
                 id={`file-upload-${task.id}`}
+                ref={fileInputRef}
                 onChange={(e) => {
-                  setFile(e.target.files[0] || null);
-                  setError('');
+                  handleFileSelect(e.target.files[0] || null);
                 }}
                 style={{ display: 'none' }}
-                accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.zip,.rar,.psd,.psb,.ai,.eps"
+                accept={ACCEPTED_TYPES}
               />
 
-              <label
-                htmlFor={`file-upload-${task.id}`}
-                className={styles.taskLink}
-                style={{
-                  cursor: 'pointer',
-                  border: '1px solid var(--border-default)',
-                  background: 'var(--surface-1)',
-                  padding: '10px 18px',
-                  borderRadius: 'var(--radius-md)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  margin: 0,
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  boxShadow: 'var(--shadow-sm)',
-                  transition: 'all var(--duration-fast)'
-                }}
-              >
-                <IconUpload size={15} />
-                <span>اختر ملفًا...</span>
-              </label>
-
-              {file && (
-                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                  <span style={{
-                    fontSize: '13px',
-                    fontWeight: '600',
-                    color: 'var(--text-primary)',
-                    textOverflow: 'ellipsis',
-                    overflow: 'hidden',
-                    whiteSpace: 'nowrap',
-                    maxWidth: '180px'
-                  }}>
-                    {file.name}
+              {!file ? (
+                <label
+                  htmlFor={`file-upload-${task.id}`}
+                  className={styles.dropzoneLabel}
+                >
+                  <IconUploadCloud size={36} className={styles.dropzoneIcon} />
+                  <span className={styles.dropzoneTitle}>اسحب ملفاً هنا أو اضغط للاختيار</span>
+                  <span className={styles.dropzoneHint}>
+                    PDF, DOCX, ZIP, RAR, PNG, JPG, PSD, AI — الحد الأقصى: 600 ميغابايت
                   </span>
-                  <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
-                    ({(file.size / (1024 * 1024)).toFixed(2)} MB)
-                  </span>
+                </label>
+              ) : (
+                <div className={styles.selectedFile}>
+                  <div className={styles.selectedFileIcon}>
+                    <IconFileText size={18} />
+                  </div>
+                  <div className={styles.selectedFileInfo}>
+                    <span className={styles.selectedFileName} title={file.name}>
+                      {file.name}
+                    </span>
+                    <span className={styles.selectedFileSize}>
+                      {(file.size / (1024 * 1024)).toFixed(2)} MB
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.removeFileBtn}
+                    onClick={handleRemoveFile}
+                    aria-label="إزالة الملف المختار"
+                  >
+                    <IconClose size={14} />
+                  </button>
                 </div>
               )}
             </div>
@@ -259,23 +311,13 @@ export default function TaskCard({ task, submission, onSubmit, onCancel }) {
         </div>
 
         {error && (
-          <div style={{
-            color: 'var(--red)',
-            fontSize: '13px',
-            background: 'var(--red-muted)',
-            padding: '8px 12px',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--red-subtle)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px'
-          }}>
+          <div className={styles.errorMsg}>
             ⚠️ {error}
           </div>
         )}
 
         {submitting && file && (
-          <div style={{ width: '100%', marginTop: '4px', marginBottom: '8px' }}>
+          <div className={styles.progressWrapper}>
             <ProgressBar
               value={uploadProgress}
               max={100}
@@ -286,7 +328,7 @@ export default function TaskCard({ task, submission, onSubmit, onCancel }) {
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+        <div className={styles.buttonGroup}>
           <Button
             type="submit"
             variant={isCompleted ? 'secondary' : 'primary'}

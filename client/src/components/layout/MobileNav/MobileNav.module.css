@@ -88,6 +88,24 @@
 
 .label { white-space: nowrap; letter-spacing: 0.02em; }
 
+.nav.scrollable {
+  justify-content: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: var(--space-2);
+  padding: 0 var(--space-5);
+  scrollbar-width: none;
+}
+
+.nav.scrollable::-webkit-scrollbar {
+  display: none;
+}
+
+.nav.scrollable .tab {
+  flex-shrink: 0;
+  min-width: 68px;
+}
+
 @media (max-width: 768px) {
   .nav { display: flex; }
 }

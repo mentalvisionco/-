@@ -58,6 +58,7 @@
   --accent-muted: rgba(92, 214, 69, 0.10);
   --accent-border: rgba(92, 214, 69, 0.20);
   --accent-glow: rgba(92, 214, 69, 0.08);
+  --accent-subtle: rgba(92, 214, 69, 0.20);
   --accent-text: #5CD645;
 
   /* ——— Semantic palette ——— */
@@ -132,6 +133,10 @@
   --shadow-2xl: 0 48px 96px rgba(0,0,0,0.6);
   --shadow-glow-accent: 0 0 25px rgba(92, 214, 69, 0.15), 0 0 8px rgba(92, 214, 69, 0.1);
   --shadow-glow-blue: 0 0 25px rgba(75, 131, 240, 0.12);
+  --shadow-glass-sm: 0 2px 8px rgba(0, 0, 0, 0.20), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-glass-md: 0 8px 24px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --shadow-glass-lg: 0 16px 40px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  --shadow-glass-xl: 0 24px 60px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.12);
   --shadow-inner: inset 0 1px 2px rgba(0,0,0,0.2);
   --shadow-focus: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--accent-border);
   --shadow-focus-danger: 0 0 0 2px var(--surface-0), 0 0 0 4px rgba(239, 68, 68, 0.25);
@@ -430,6 +435,44 @@ small { font-size: var(--font-sm); color: var(--text-tertiary); }
 @keyframes dotPulse {
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.4); opacity: 0.7; }
+}
+
+/* ——— Slide out down for exit animations ——— */
+@keyframes slideOutDown {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(100%); }
+}
+
+/* ——— Gentle bouncing for icons ——— */
+@keyframes gentleBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+/* ——— Float animation ——— */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* ——— Shimmer effect for glass panels ——— */
+@keyframes shimmerGlass {
+  0% { transform: translateX(-100%) skewX(-15deg); }
+  100% { transform: translateX(100%) skewX(-15deg); }
+}
+
+/* ——— Progress bar shrink ——— */
+@keyframes progressShrink {
+  from { width: 100%; }
+  to { width: 0; }
+}
+
+/* ——— Ripple click effect keyframe ——— */
+@keyframes ripple {
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
 }
 
 /* ================================================================
