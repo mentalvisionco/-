@@ -15,8 +15,26 @@
   justify-content: center;
   margin-bottom: var(--space-1);
 }
-.iconWrap.danger { background: var(--red-muted); color: var(--red); }
-.iconWrap.warning { background: var(--amber-muted); color: var(--amber); }
+.iconWrap.danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--red);
+  border-top: 1px solid rgba(239, 68, 68, 0.25);
+  border-left: 1px solid rgba(239, 68, 68, 0.15);
+  border-right: 1px solid rgba(239, 68, 68, 0.15);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.05);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.iconWrap.warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--amber);
+  border-top: 1px solid rgba(245, 158, 11, 0.25);
+  border-left: 1px solid rgba(245, 158, 11, 0.15);
+  border-right: 1px solid rgba(245, 158, 11, 0.15);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.05);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
 .title {
   font-size: var(--font-lg);
   font-weight: var(--weight-semibold);

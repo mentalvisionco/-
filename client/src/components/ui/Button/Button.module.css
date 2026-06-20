@@ -58,26 +58,38 @@
 
 /* ——— Variants ——— */
 .primary {
-  background: var(--text-primary);
-  color: var(--surface-0);
-  border-color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--text-primary);
+  border-top-color: rgba(255, 255, 255, 0.25);
+  border-left-color: rgba(255, 255, 255, 0.12);
+  border-right-color: rgba(255, 255, 255, 0.12);
+  border-bottom-color: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(var(--glass-blur-light));
+  -webkit-backdrop-filter: blur(var(--glass-blur-light));
   font-weight: var(--weight-semibold);
 }
 .primary:hover:not(:disabled) {
-  background: #ffffff;
-  border-color: #ffffff;
-  box-shadow: var(--shadow-sm);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--surface-0);
+  border-color: rgba(255, 255, 255, 0.95);
+  box-shadow: var(--shadow-glass-md);
 }
 
 .secondary {
-  background: var(--surface-2);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--text-primary);
-  border-color: var(--border-default);
+  border-top-color: rgba(255, 255, 255, 0.12);
+  border-left-color: rgba(255, 255, 255, 0.06);
+  border-right-color: rgba(255, 255, 255, 0.06);
+  border-bottom-color: rgba(255, 255, 255, 0.02);
 }
 .secondary:hover:not(:disabled) {
-  background: var(--surface-3);
-  border-color: var(--border-hover);
-  box-shadow: var(--shadow-xs);
+  background: rgba(255, 255, 255, 0.08);
+  border-top-color: rgba(255, 255, 255, 0.18);
+  border-left-color: rgba(255, 255, 255, 0.10);
+  border-right-color: rgba(255, 255, 255, 0.10);
+  border-bottom-color: rgba(255, 255, 255, 0.04);
+  box-shadow: var(--shadow-glass-sm);
 }
 
 .ghost {
@@ -86,30 +98,44 @@
   border-color: transparent;
 }
 .ghost:hover:not(:disabled) {
-  background: var(--surface-2);
+  background: var(--surface-glass-control);
   color: var(--text-primary);
+  border-top-color: var(--glass-border-top);
+  border-left-color: var(--glass-border-side);
+  border-right-color: var(--glass-border-side);
+  border-bottom-color: var(--glass-border-bottom);
 }
 
 .danger {
-  background: var(--red-muted);
+  background: rgba(239, 68, 68, 0.12);
   color: var(--red);
-  border-color: transparent;
+  border-top-color: rgba(239, 68, 68, 0.25);
+  border-left-color: rgba(239, 68, 68, 0.15);
+  border-right-color: rgba(239, 68, 68, 0.15);
+  border-bottom-color: rgba(239, 68, 68, 0.05);
 }
 .danger:hover:not(:disabled) {
   background: var(--red);
   color: white;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
+  border-color: var(--red);
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.35);
 }
 
 .accent {
-  background: var(--accent);
-  color: var(--surface-0);
-  border-color: var(--accent);
+  background: rgba(92, 214, 69, 0.12);
+  color: var(--accent);
+  border-top-color: rgba(92, 214, 69, 0.3);
+  border-left-color: rgba(92, 214, 69, 0.15);
+  border-right-color: rgba(92, 214, 69, 0.15);
+  border-bottom-color: rgba(92, 214, 69, 0.05);
+  backdrop-filter: blur(var(--glass-blur-light));
+  -webkit-backdrop-filter: blur(var(--glass-blur-light));
   font-weight: var(--weight-semibold);
 }
 .accent:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
+  background: var(--accent);
+  color: var(--surface-0);
+  border-color: var(--accent);
   box-shadow: var(--shadow-glow-accent);
 }
 

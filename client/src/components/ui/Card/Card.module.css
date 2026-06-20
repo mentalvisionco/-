@@ -1,24 +1,48 @@
 .card {
-  background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
+  background: var(--surface-glass-base);
+  backdrop-filter: blur(var(--glass-blur-base));
+  -webkit-backdrop-filter: blur(var(--glass-blur-base));
+  border-top: 1px solid var(--glass-border-top);
+  border-left: 1px solid var(--glass-border-side);
+  border-right: 1px solid var(--glass-border-side);
+  border-bottom: 1px solid var(--glass-border-bottom);
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-glass-sm);
+  position: relative;
+  overflow: hidden;
   transition:
     border-color var(--duration-normal) var(--ease-out),
     box-shadow var(--duration-normal) var(--ease-out),
     transform var(--duration-normal) var(--ease-out);
 }
 
-.card:hover { border-color: var(--border-default); }
+.card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--glass-noise);
+  opacity: 0.015;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 1;
+}
+
+.card:hover {
+  border-top-color: rgba(255, 255, 255, 0.24);
+  border-left-color: rgba(255, 255, 255, 0.14);
+  border-right-color: rgba(255, 255, 255, 0.14);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
 
 /* Padding variants — must match Card.js `pad-${padding}` naming */
-.pad-sm { padding: var(--space-5) var(--space-6); }
-.pad-md { padding: var(--space-6) var(--space-7); }
-.pad-lg { padding: var(--space-8) var(--space-10); }
+.pad-sm { padding: var(--space-5) var(--space-6); position: relative; z-index: 2; }
+.pad-md { padding: var(--space-6) var(--space-7); position: relative; z-index: 2; }
+.pad-lg { padding: var(--space-8) var(--space-10); position: relative; z-index: 2; }
 
 .hoverable:hover {
-  border-color: var(--border-hover);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
+  box-shadow: var(--shadow-glass-md);
+  transform: translateY(-2px) scale(1.005);
 }
 
 .animate {

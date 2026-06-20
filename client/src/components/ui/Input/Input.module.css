@@ -18,8 +18,13 @@
 .input {
   width: 100%;
   padding: var(--space-3) var(--space-4);
-  background: var(--surface-2);
-  border: 1px solid var(--border-default);
+  background: var(--surface-glass-control);
+  backdrop-filter: blur(var(--glass-blur-light));
+  -webkit-backdrop-filter: blur(var(--glass-blur-light));
+  border-top: 1px solid var(--glass-border-top);
+  border-left: 1px solid var(--glass-border-side);
+  border-right: 1px solid var(--glass-border-side);
+  border-bottom: 1px solid var(--glass-border-bottom);
   border-radius: var(--radius-md);
   color: var(--text-primary);
   transition:
@@ -35,15 +40,21 @@
 }
 
 .input:hover:not(:focus):not(:disabled) {
-  border-color: var(--border-hover);
-  background: var(--surface-3);
+  border-top-color: rgba(255, 255, 255, 0.28);
+  border-left-color: rgba(255, 255, 255, 0.16);
+  border-right-color: rgba(255, 255, 255, 0.16);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .input:focus {
   outline: none;
-  border-color: var(--accent-border);
-  box-shadow: 0 0 0 3px var(--accent-glow), var(--shadow-xs);
-  background: var(--surface-1);
+  border-top-color: rgba(92, 214, 69, 0.4);
+  border-left-color: rgba(92, 214, 69, 0.25);
+  border-right-color: rgba(92, 214, 69, 0.25);
+  border-bottom-color: rgba(92, 214, 69, 0.1);
+  box-shadow: 0 0 16px rgba(92, 214, 69, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  background: rgba(92, 214, 69, 0.03);
 }
 
 .input:focus::placeholder { color: var(--text-tertiary); }

@@ -12,10 +12,16 @@
 .iconWrap {
   width: 72px; height: 72px;
   border-radius: var(--radius-xl);
-  background: var(--surface-2);
-  border: 1px solid var(--border-subtle);
+  background: var(--surface-glass-control);
+  backdrop-filter: blur(var(--glass-blur-light));
+  -webkit-backdrop-filter: blur(var(--glass-blur-light));
+  border-top: 1px solid var(--glass-border-top);
+  border-left: 1px solid var(--glass-border-side);
+  border-right: 1px solid var(--glass-border-side);
+  border-bottom: 1px solid var(--glass-border-bottom);
+  box-shadow: var(--shadow-glass-sm);
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-disabled);
+  color: var(--text-tertiary);
   animation: float 3s ease-in-out infinite;
   margin-bottom: var(--space-2);
 }

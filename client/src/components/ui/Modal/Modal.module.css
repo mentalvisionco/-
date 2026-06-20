@@ -1,9 +1,9 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(var(--glass-blur-base));
+  -webkit-backdrop-filter: blur(var(--glass-blur-base));
   z-index: var(--z-modal);
   display: flex;
   align-items: center;
@@ -14,17 +14,36 @@
 
 @keyframes overlayIn {
   from { opacity: 0; backdrop-filter: blur(0); }
-  to { opacity: 1; backdrop-filter: blur(6px); }
+  to { opacity: 1; backdrop-filter: blur(var(--glass-blur-base)); }
 }
 
 .modal {
-  background: var(--surface-1);
-  border: 1px solid var(--border-default);
+  background: var(--surface-glass-floating);
+  backdrop-filter: blur(var(--glass-blur-heavy));
+  -webkit-backdrop-filter: blur(var(--glass-blur-heavy));
+  border-top: 1px solid var(--glass-border-top);
+  border-left: 1px solid var(--glass-border-side);
+  border-right: 1px solid var(--glass-border-side);
+  border-bottom: 1px solid var(--glass-border-bottom);
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-2xl);
+  box-shadow: var(--shadow-glass-lg);
   width: 100%;
   overflow: hidden;
-  animation: modalSpring var(--duration-slower) var(--ease-out);
+  position: relative;
+  z-index: 1;
+  animation: modalSpring var(--duration-slower) var(--ease-elastic);
+}
+
+.modal::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--glass-noise);
+  opacity: 0.018;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: -1;
 }
 
 @keyframes modalSpring {
@@ -42,7 +61,9 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-6) var(--space-7);
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--glass-border-bottom);
+  position: relative;
+  z-index: 2;
 }
 
 .title {
@@ -58,10 +79,15 @@
   display: flex; align-items: center; justify-content: center;
   color: var(--text-tertiary);
   transition: all var(--duration-normal) var(--ease-out);
+  border: 1px solid transparent;
 }
 .close:hover {
-  background: var(--surface-3);
+  background: var(--surface-glass-control);
   color: var(--text-primary);
+  border-top-color: var(--glass-border-top);
+  border-left-color: var(--glass-border-side);
+  border-right-color: var(--glass-border-side);
+  border-bottom-color: var(--glass-border-bottom);
   transform: rotate(90deg);
 }
 
@@ -69,6 +95,8 @@
   padding: var(--space-7);
   max-height: 65vh;
   overflow-y: auto;
+  position: relative;
+  z-index: 2;
 }
 
 @media (max-width: 640px) {

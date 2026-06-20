@@ -9,7 +9,10 @@
   letter-spacing: 0.02em;
   line-height: 1.4;
   white-space: nowrap;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   transition: all var(--duration-normal) var(--ease-out);
+  border: 1px solid transparent;
 }
 
 .dot::before {
@@ -27,9 +30,56 @@
 }
 
 /* ——— Variants ——— */
-.default { background: var(--surface-3); color: var(--text-secondary); }
-.success { background: var(--green-muted); color: var(--green); border: 1px solid rgba(92, 214, 69, 0.15); }
-.danger { background: var(--red-muted); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.15); }
-.warning { background: var(--amber-muted); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.15); }
-.info { background: var(--blue-muted); color: var(--blue); border: 1px solid rgba(75, 131, 240, 0.15); }
-.accent { background: var(--accent-muted); color: var(--accent); border: 1px solid var(--accent-border); }
+.default {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  border-top-color: rgba(255, 255, 255, 0.12);
+  border-left-color: rgba(255, 255, 255, 0.06);
+  border-right-color: rgba(255, 255, 255, 0.06);
+  border-bottom-color: rgba(255, 255, 255, 0.02);
+}
+
+.success {
+  background: rgba(92, 214, 69, 0.08);
+  color: var(--accent);
+  border-top-color: rgba(92, 214, 69, 0.25);
+  border-left-color: rgba(92, 214, 69, 0.12);
+  border-right-color: rgba(92, 214, 69, 0.12);
+  border-bottom-color: rgba(92, 214, 69, 0.04);
+}
+
+.danger {
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--red);
+  border-top-color: rgba(239, 68, 68, 0.25);
+  border-left-color: rgba(239, 68, 68, 0.12);
+  border-right-color: rgba(239, 68, 68, 0.12);
+  border-bottom-color: rgba(239, 68, 68, 0.04);
+}
+
+.warning {
+  background: rgba(245, 158, 11, 0.08);
+  color: var(--amber);
+  border-top-color: rgba(245, 158, 11, 0.25);
+  border-left-color: rgba(245, 158, 11, 0.12);
+  border-right-color: rgba(245, 158, 11, 0.12);
+  border-bottom-color: rgba(245, 158, 11, 0.04);
+}
+
+.info {
+  background: rgba(75, 131, 240, 0.08);
+  color: var(--blue);
+  border-top-color: rgba(75, 131, 240, 0.25);
+  border-left-color: rgba(75, 131, 240, 0.12);
+  border-right-color: rgba(75, 131, 240, 0.12);
+  border-bottom-color: rgba(75, 131, 240, 0.04);
+}
+
+.accent {
+  background: rgba(92, 214, 69, 0.08);
+  color: var(--accent);
+  border-top-color: rgba(92, 214, 69, 0.25);
+  border-left-color: rgba(92, 214, 69, 0.12);
+  border-right-color: rgba(92, 214, 69, 0.12);
+  border-bottom-color: rgba(92, 214, 69, 0.04);
+}

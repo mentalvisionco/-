@@ -5,7 +5,7 @@
   gap: var(--space-5);
   margin-bottom: var(--space-10);
   padding-bottom: var(--space-7);
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--glass-border-bottom);
   animation: headerIn var(--duration-slow) var(--ease-out) both;
 }
 

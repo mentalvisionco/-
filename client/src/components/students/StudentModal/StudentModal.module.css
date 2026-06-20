@@ -6,8 +6,8 @@
 }
 
 .editIndicator {
-  background: var(--surface-2);
-  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border-bottom);
   border-radius: var(--radius-md);
   padding: var(--space-4);
   display: flex;
@@ -17,8 +17,9 @@
 }
 
 .editBadge {
-  background: var(--accent-subtle);
-  color: var(--accent-text);
+  background: rgba(92, 214, 69, 0.08);
+  color: var(--accent);
+  border: 1px solid rgba(92, 214, 69, 0.2);
   font-size: var(--font-xs);
   font-weight: var(--weight-bold);
   padding: var(--space-1) var(--space-2);
@@ -67,7 +68,7 @@
   gap: var(--space-3);
   margin-top: var(--space-2);
   padding-top: var(--space-4);
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--glass-border-bottom);
 }
 
 @keyframes fadeIn {

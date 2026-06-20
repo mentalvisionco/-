@@ -66,7 +66,7 @@ validateEnv();
 
 const { setupDB, dbGet, dbAll, dbRun, logAudit, dbBackup, dbTransaction, toggleForeignKeys, replaceDatabaseFile } = require('./database');
 const multer = require('multer');
-const { uploadFile, deleteFile } = require('./services/storage');
+const { uploadFile, deleteFile, getFileStream } = require('./services/storage');
 
 // ==============================
 // Multer Configuration
@@ -356,8 +356,8 @@ app.post('/api/login', (req, res) => {
     }
 
     const tokenPayload = { id: user.id, name: user.name, username: user.username, role: user.role };
-    // Access token valid for 15 minutes
-    const accessToken = jwt.sign(tokenPayload, ACTIVE_SECRET_KEY, { expiresIn: '15m' });
+    // Access token without short expiration
+    const accessToken = jwt.sign(tokenPayload, ACTIVE_SECRET_KEY);
 
     // Refresh token valid for 7 days
     const refreshToken = generateRefreshToken();
@@ -438,7 +438,7 @@ app.post('/api/auth/refresh', (req, res) => {
     }
 
     const tokenPayload = { id: user.id, name: user.name, username: user.username, role: user.role };
-    const newAccessToken = jwt.sign(tokenPayload, ACTIVE_SECRET_KEY, { expiresIn: '15m' });
+    const newAccessToken = jwt.sign(tokenPayload, ACTIVE_SECRET_KEY);
 
     // Refresh Token Rotation (RTR)
     const newRefreshToken = generateRefreshToken();
@@ -723,9 +723,45 @@ app.delete('/api/submissions/:taskId', authenticateToken, requireStudent, async 
   }
 });
 
+// --- Stream file from Google Drive (Proxy) ---
+app.get('/api/files/:fileId', authenticateToken, async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    if (!fileId) {
+      return res.status(400).json({ error: 'معرف الملف مطلوب' });
+    }
+
+    const fileInfo = await getFileStream(fileId);
+
+    res.setHeader('Content-Type', fileInfo.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileInfo.name)}"`);
+    if (fileInfo.size) {
+      res.setHeader('Content-Length', fileInfo.size);
+    }
+
+    fileInfo.stream
+      .on('error', (err) => {
+        logger.error('Error streaming from Drive: %s', err.stack);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'حدث خطأ أثناء تحميل الملف من Google Drive' });
+        }
+      })
+      .pipe(res);
+  } catch (error) {
+    logger.error('File proxy error: %s', error.stack);
+    if (error.status === 404) {
+      return res.status(404).json({ error: 'الملف غير موجود في Google Drive' });
+    }
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'حدث خطأ في الخادم أثناء جلب الملف' });
+    }
+  }
+});
+
 // =======================
 // مسارات الإدارة (Admin)
 // =======================
+
 
 app.get('/api/leaderboard', authenticateToken, (req, res) => {
   try {

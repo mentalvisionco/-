@@ -143,9 +143,45 @@ async function deleteDriveFile(fileId) {
   }
 }
 
+/**
+ * Retrieves a file stream and metadata from Google Drive.
+ * @param {string} fileId - The ID of the file to retrieve
+ * @returns {Promise<Object>} Object with { stream, name, mimeType, size }
+ */
+async function getDriveFileStream(fileId) {
+  if (!drive) {
+    throw new Error('Google Drive integration is not configured or initialized.');
+  }
+
+  // Get file metadata first
+  const metadata = await retryWithBackoff(async () => {
+    return await drive.files.get({
+      fileId: fileId,
+      fields: 'name, mimeType, size',
+    });
+  });
+
+  // Get file media content stream
+  const response = await retryWithBackoff(async () => {
+    return await drive.files.get(
+      { fileId: fileId, alt: 'media' },
+      { responseType: 'stream' }
+    );
+  });
+
+  return {
+    stream: response.data,
+    name: metadata.data.name,
+    mimeType: metadata.data.mimeType,
+    size: metadata.data.size,
+  };
+}
+
 module.exports = {
   drive,
   uploadFileToDrive,
   deleteDriveFile,
+  getDriveFileStream,
 };
+
 

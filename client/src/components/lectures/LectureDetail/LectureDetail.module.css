@@ -31,13 +31,24 @@
   align-items: center;
   gap: var(--space-5);
   padding: var(--space-6);
-  background: var(--surface-2);
-  border: 1px solid var(--border-subtle);
+  background: var(--surface-glass-base);
+  backdrop-filter: blur(var(--glass-blur-base));
+  -webkit-backdrop-filter: blur(var(--glass-blur-base));
+  border-top: 1px solid var(--glass-border-top);
+  border-left: 1px solid var(--glass-border-side);
+  border-right: 1px solid var(--glass-border-side);
+  border-bottom: 1px solid var(--glass-border-bottom);
   border-radius: var(--radius-lg);
   margin-bottom: var(--space-10);
-  transition: border-color var(--duration-normal);
+  transition: border-color var(--duration-normal), box-shadow var(--duration-normal), transform var(--duration-normal);
 }
-.materialSection:hover { border-color: var(--border-hover); }
+.materialSection:hover {
+  border-top-color: rgba(255, 255, 255, 0.24);
+  border-left-color: rgba(255, 255, 255, 0.14);
+  border-right-color: rgba(255, 255, 255, 0.14);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  box-shadow: var(--shadow-glass-md);
+}
 
 .materialIcon { font-size: 2rem; flex-shrink: 0; }
 .materialInfo { flex: 1; min-width: 0; }
@@ -50,19 +61,28 @@
 .materialLink {
   display: inline-flex; align-items: center; gap: var(--space-2);
   padding: var(--space-3) var(--space-5);
-  background: var(--accent);
-  color: var(--surface-0);
+  background: rgba(92, 214, 69, 0.12);
+  color: var(--accent);
+  border: 1px solid rgba(92, 214, 69, 0.2);
+  backdrop-filter: blur(var(--glass-blur-light));
+  -webkit-backdrop-filter: blur(var(--glass-blur-light));
   border-radius: var(--radius-md);
   font-size: var(--font-base); font-weight: var(--weight-semibold);
   transition: all var(--duration-normal);
   white-space: nowrap; flex-shrink: 0;
 }
-.materialLink:hover { background: var(--accent-hover); box-shadow: var(--shadow-glow-accent); transform: translateY(-1px); }
+.materialLink:hover {
+  background: var(--accent);
+  color: var(--surface-0);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-glow-accent);
+  transform: translateY(-2px);
+}
 .materialLink:active { transform: scale(0.97); }
 
 .ratingSection {
   padding-top: var(--space-8);
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--glass-border-bottom);
   display: flex;
   flex-direction: column;
   gap: var(--space-5);

@@ -1,7 +1,7 @@
 .dashboard {
   display: flex;
   min-height: 100vh;
-  background: var(--surface-0);
+  background: transparent;
 }
 
 .main {
@@ -30,10 +30,11 @@
   position: sticky;
   top: 0;
   z-index: var(--z-sticky);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  background: var(--glass-bg);
-  border-bottom: 1px solid var(--glass-border);
+  backdrop-filter: blur(var(--glass-blur-base));
+  -webkit-backdrop-filter: blur(var(--glass-blur-base));
+  background: var(--surface-glass-base);
+  border-bottom: 1px solid var(--glass-border-bottom);
+  box-shadow: var(--shadow-glass-sm);
 }
 
 @media (max-width: 1200px) {

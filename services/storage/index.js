@@ -24,7 +24,18 @@ async function deleteFile(fileId) {
   return await googleDrive.deleteDriveFile(fileId);
 }
 
+/**
+ * Retrieves a file stream and metadata from the active storage provider.
+ * @param {string} fileId - The unique identifier of the file
+ * @returns {Promise<Object>} Object with { stream, name, mimeType, size }
+ */
+async function getFileStream(fileId) {
+  return await googleDrive.getDriveFileStream(fileId);
+}
+
 module.exports = {
   uploadFile,
   deleteFile,
+  getFileStream,
 };
+

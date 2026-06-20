@@ -94,6 +94,49 @@ export default function BackupPanel() {
 
   useEffect(() => { fetchBackups(); }, [fetchBackups]);
 
+  // Helper to fetch files that require authentication (handles token refresh)
+  const fetchFileWithAuth = useCallback(async (url) => {
+    let token = getToken();
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'X-Requested-With': 'XMLHttpRequest'
+    };
+
+    let res = await fetch(url, { headers });
+
+    if (res.status === 401 && token) {
+      try {
+        const refreshRes = await fetch(`${API_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          credentials: 'include'
+        });
+
+        if (refreshRes.ok) {
+          const data = await refreshRes.json();
+          const newToken = data.accessToken;
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('lms_token', newToken);
+          }
+          headers['Authorization'] = `Bearer ${newToken}`;
+          res = await fetch(url, { headers });
+        } else {
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('lms_token');
+            localStorage.removeItem('currentUser');
+            window.location.href = '/';
+          }
+        }
+      } catch {
+        // failed to refresh
+      }
+    }
+    return res;
+  }, [authHeaders]);
+
   // ------- EXPORT -------
   const handleExport = async () => {
     setExporting(true);
@@ -101,13 +144,23 @@ export default function BackupPanel() {
     try {
       const date = new Date().toISOString().slice(0, 10);
       const filename = `lms-backup-${exportScope}-${date}.json`;
-      const url = `${API_URL}/admin/export?scope=${exportScope}&token=${getToken()}`;
+      const url = `${API_URL}/admin/export?scope=${exportScope}`;
+      
+      const res = await fetchFileWithAuth(url);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'حدث خطأ أثناء تصدير البيانات');
+      }
+
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
+      a.href = blobUrl;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      window.URL.revokeObjectURL(blobUrl);
 
       setExportSuccess(true);
       toast.success('تم تصدير البيانات بنجاح');
@@ -244,18 +297,28 @@ export default function BackupPanel() {
   };
 
   // ------- DOWNLOAD BACKUP -------
-  const handleDownloadBackup = (filename) => {
+  const handleDownloadBackup = async (filename) => {
     try {
-      const url = `${API_URL}/admin/backups/${encodeURIComponent(filename)}?token=${getToken()}`;
+      const url = `${API_URL}/admin/backups/${encodeURIComponent(filename)}`;
+      const res = await fetchFileWithAuth(url);
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'فشل تحميل النسخة الاحتياطية');
+      }
+
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
+      a.href = blobUrl;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      window.URL.revokeObjectURL(blobUrl);
       toast.success('تم تحميل النسخة الاحتياطية');
-    } catch {
-      toast.error('فشل تحميل النسخة الاحتياطية');
+    } catch (err) {
+      toast.error(err.message || 'فشل تحميل النسخة الاحتياطية');
     }
   };
 

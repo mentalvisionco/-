@@ -6,6 +6,7 @@ import Button from '@/components/ui/Button/Button';
 import Input from '@/components/ui/Input/Input';
 import ProgressBar from '@/components/ui/ProgressBar/ProgressBar';
 import { IconExternalLink, IconCheck, IconUpload, IconTrash } from '@/components/icons';
+import { getToken, API_URL } from '@/lib/api';
 
 export default function TaskCard({ task, submission, onSubmit, onCancel }) {
   const isCompleted = !!submission;
@@ -138,28 +139,42 @@ export default function TaskCard({ task, submission, onSubmit, onCancel }) {
                   <p style={{ margin: 0, color: 'var(--text-primary)', fontSize: '13.5px', lineHeight: '1.6' }}>{submission.feedback}</p>
                 </div>
               )}
-              {submission.feedbackFileUrl && (
-                <div style={{ marginTop: submission.feedback ? '4px' : '0' }}>
-                  <span style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '8px', fontWeight: '500' }}>الصورة التوضيحية المرفقة من المعلم:</span>
-                  <a href={submission.feedbackFileUrl.includes('drive.google.com/file/d/') ? `https://drive.google.com/uc?export=view&id=${submission.feedbackFileUrl.match(/drive\.google\.com\/file\/d\/([^\/]+)/)?.[1]}` : submission.feedbackFileUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', maxWidth: '100%' }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img 
-                      src={submission.feedbackFileUrl.includes('drive.google.com/file/d/') ? `https://drive.google.com/uc?export=view&id=${submission.feedbackFileUrl.match(/drive\.google\.com\/file\/d\/([^\/]+)/)?.[1]}` : submission.feedbackFileUrl} 
-                      alt="توضيح المعلم" 
-                      style={{
-                        maxWidth: '100%',
-                        maxHeight: '320px',
-                        borderRadius: 'var(--radius-sm)',
-                        border: '1px solid var(--border-subtle)',
-                        boxShadow: 'var(--shadow-sm)',
-                        cursor: 'zoom-in',
-                        objectFit: 'contain',
-                        background: 'var(--surface-3)'
-                      }} 
-                    />
-                  </a>
-                </div>
-              )}
+              {submission.feedbackFileUrl && (() => {
+                const getDriveId = (url) => {
+                  if (!url) return null;
+                  const match = url.match(/drive\.google\.com\/file\/d\/([^\/]+)/);
+                  return match ? match[1] : null;
+                };
+                const fileId = submission.feedbackFileId || getDriveId(submission.feedbackFileUrl);
+                const token = getToken();
+                const displayUrl = fileId 
+                  ? `${API_URL}/files/${fileId}?token=${token}` 
+                  : submission.feedbackFileUrl;
+
+                return (
+                  <div style={{ marginTop: submission.feedback ? '4px' : '0' }}>
+                    <span style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '8px', fontWeight: '500' }}>الصورة التوضيحية المرفقة من المعلم:</span>
+                    <a href={displayUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', maxWidth: '100%' }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img 
+                        src={displayUrl} 
+                        alt="توضيح المعلم" 
+                        style={{
+                          maxWidth: '100%',
+                          maxHeight: '320px',
+                          borderRadius: 'var(--radius-sm)',
+                          border: '1px solid var(--border-subtle)',
+                          boxShadow: 'var(--shadow-sm)',
+                          cursor: 'zoom-in',
+                          objectFit: 'contain',
+                          background: 'var(--surface-3)'
+                        }} 
+                      />
+                    </a>
+                  </div>
+                );
+              })()}
+
             </div>
           )}
         </div>

@@ -3,30 +3,52 @@
 .item {
   display: flex; align-items: center; gap: var(--space-5);
   padding: var(--space-4) var(--space-5);
-  background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
+  background: var(--surface-glass-base);
+  backdrop-filter: blur(var(--glass-blur-base));
+  -webkit-backdrop-filter: blur(var(--glass-blur-base));
+  border-top: 1px solid var(--glass-border-top);
+  border-left: 1px solid var(--glass-border-side);
+  border-right: 1px solid var(--glass-border-side);
+  border-bottom: 1px solid var(--glass-border-bottom);
   border-radius: var(--radius-lg);
   transition: all var(--duration-normal) var(--ease-out);
   animation: rowIn var(--duration-slow) var(--ease-out) both;
 }
 .item:hover {
-  border-color: var(--border-default);
-  background: var(--surface-2);
-  transform: translateX(-2px);
+  border-top-color: rgba(255, 255, 255, 0.24);
+  border-left-color: rgba(255, 255, 255, 0.14);
+  border-right-color: rgba(255, 255, 255, 0.14);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  background: var(--surface-glass-control);
+  box-shadow: var(--shadow-glass-sm);
+  transform: translateX(-4px);
 }
 
 .rank {
   width: 34px; height: 34px;
   border-radius: var(--radius-full);
-  background: var(--surface-3);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-tertiary);
+  background: var(--surface-glass-control);
+  backdrop-filter: blur(var(--glass-blur-light));
+  -webkit-backdrop-filter: blur(var(--glass-blur-light));
+  border-top: 1px solid var(--glass-border-top);
+  border-left: 1px solid var(--glass-border-side);
+  border-right: 1px solid var(--glass-border-side);
+  border-bottom: 1px solid var(--glass-border-bottom);
+  color: var(--text-secondary);
   display: flex; align-items: center; justify-content: center;
   font-size: var(--font-base); font-weight: var(--weight-bold);
   flex-shrink: 0;
   transition: all var(--duration-normal);
 }
-.item:hover .rank { background: var(--accent-muted); color: var(--accent); border-color: var(--accent-border); }
+.item:hover .rank {
+  background: rgba(92, 214, 69, 0.12);
+  color: var(--accent);
+  border-top-color: rgba(92, 214, 69, 0.3);
+  border-left-color: rgba(92, 214, 69, 0.15);
+  border-right-color: rgba(92, 214, 69, 0.15);
+  border-bottom-color: rgba(92, 214, 69, 0.04);
+  box-shadow: 0 0 10px rgba(92, 214, 69, 0.2);
+}
 
 .name {
   flex: 1; font-size: var(--font-md); font-weight: var(--weight-semibold);

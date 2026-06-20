@@ -1,7 +1,29 @@
-.form { margin-bottom: var(--space-6); }
-.heading {
-  font-size: var(--font-lg); font-weight: var(--weight-semibold);
-  margin-bottom: var(--space-6); line-height: var(--leading-tight);
+.form {
+  margin-bottom: var(--space-6);
+  animation: scaleIn var(--duration-normal) var(--ease-out);
 }
-.fields { display: flex; flex-direction: column; gap: var(--space-5); }
-.actions { display: flex; gap: var(--space-3); padding-top: var(--space-4); }
+
+.heading {
+  font-size: var(--font-lg);
+  font-weight: var(--weight-bold);
+  margin-bottom: var(--space-6);
+  line-height: var(--leading-tight);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: var(--space-3);
+  letter-spacing: var(--tracking-tight);
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+  padding-top: var(--space-5);
+}
+

@@ -8,7 +8,12 @@
 .empty { min-height: 80px; }
 
 .card {
-  border: 1px solid var(--border-subtle);
+  backdrop-filter: blur(var(--glass-blur-base));
+  -webkit-backdrop-filter: blur(var(--glass-blur-base));
+  border-top: 1px solid var(--glass-border-top);
+  border-left: 1px solid var(--glass-border-side);
+  border-right: 1px solid var(--glass-border-side);
+  border-bottom: 1px solid var(--glass-border-bottom);
   border-radius: var(--radius-xl);
   padding: var(--space-8) var(--space-5);
   text-align: center;
@@ -18,40 +23,52 @@
   animation: podiumIn var(--duration-slower) var(--ease-spring) both;
 }
 
-/* Glassmorphism effect */
+/* Glassmorphism organic noise overlay */
 .card::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 50%);
+  background-image: var(--glass-noise);
+  opacity: 0.015;
+  mix-blend-mode: overlay;
   pointer-events: none;
+  z-index: 1;
 }
 
 .card:hover {
   transform: translateY(-6px);
-  box-shadow: var(--shadow-lg);
+  border-top-color: rgba(255, 255, 255, 0.28);
 }
 
 .gold {
-  background: linear-gradient(180deg, rgba(245, 166, 35, 0.10) 0%, var(--surface-1) 70%);
-  border-color: rgba(245, 166, 35, 0.2);
+  background: linear-gradient(180deg, rgba(245, 166, 35, 0.12) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border-top-color: rgba(245, 166, 35, 0.4);
+  border-left-color: rgba(245, 166, 35, 0.2);
+  border-right-color: rgba(245, 166, 35, 0.2);
+  border-bottom-color: rgba(245, 166, 35, 0.05);
   min-height: 200px;
 }
-.gold:hover { box-shadow: 0 12px 28px rgba(245, 166, 35, 0.12); }
+.gold:hover { box-shadow: 0 16px 48px rgba(245, 166, 35, 0.2), var(--shadow-glass-lg); }
 
 .silver {
-  background: linear-gradient(180deg, rgba(176, 186, 197, 0.08) 0%, var(--surface-1) 70%);
-  border-color: rgba(176, 186, 197, 0.15);
+  background: linear-gradient(180deg, rgba(176, 186, 197, 0.12) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border-top-color: rgba(176, 186, 197, 0.4);
+  border-left-color: rgba(176, 186, 197, 0.2);
+  border-right-color: rgba(176, 186, 197, 0.2);
+  border-bottom-color: rgba(176, 186, 197, 0.05);
   min-height: 165px;
 }
-.silver:hover { box-shadow: 0 12px 28px rgba(176, 186, 197, 0.08); }
+.silver:hover { box-shadow: 0 16px 48px rgba(176, 186, 197, 0.15), var(--shadow-glass-md); }
 
 .bronze {
-  background: linear-gradient(180deg, rgba(200, 117, 51, 0.08) 0%, var(--surface-1) 70%);
-  border-color: rgba(200, 117, 51, 0.15);
+  background: linear-gradient(180deg, rgba(200, 117, 51, 0.12) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border-top-color: rgba(200, 117, 51, 0.4);
+  border-left-color: rgba(200, 117, 51, 0.2);
+  border-right-color: rgba(200, 117, 51, 0.2);
+  border-bottom-color: rgba(200, 117, 51, 0.05);
   min-height: 145px;
 }
-.bronze:hover { box-shadow: 0 12px 28px rgba(200, 117, 51, 0.08); }
+.bronze:hover { box-shadow: 0 16px 48px rgba(200, 117, 51, 0.15), var(--shadow-glass-md); }
 
 .medal {
   font-size: 2.75rem; display: block;
