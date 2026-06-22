@@ -51,12 +51,56 @@ async function retryWithBackoff(fn, retries = 3, delay = 1000) {
 }
 
 /**
+ * Resolves a folder ID by name inside a parent folder, creating it if it doesn't exist.
+ * @param {string} name - Name of the folder
+ * @param {string} parentId - Parent folder ID
+ * @returns {Promise<string>} Folder ID
+ */
+async function getOrCreateFolder(name, parentId) {
+  if (!drive) return parentId;
+
+  // Escape single quotes for Google Drive Query syntax
+  const escapedName = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const query = `name = '${escapedName}' and mimeType = 'application/vnd.google-apps.folder' and '${parentId}' in parents and trashed = false`;
+
+  const response = await retryWithBackoff(async () => {
+    return await drive.files.list({
+      q: query,
+      spaces: 'drive',
+      fields: 'files(id, name)',
+    });
+  });
+
+  const files = response.data.files;
+  if (files && files.length > 0) {
+    return files[0].id;
+  }
+
+  // Not found, create the folder
+  const fileMetadata = {
+    name: name,
+    mimeType: 'application/vnd.google-apps.folder',
+    parents: [parentId],
+  };
+
+  const createResponse = await retryWithBackoff(async () => {
+    return await drive.files.create({
+      requestBody: fileMetadata,
+      fields: 'id',
+    });
+  });
+
+  return createResponse.data.id;
+}
+
+/**
  * Uploads a file buffer directly to Google Drive.
  * @param {Object} file - Multer file object (contains buffer, originalname, mimetype)
  * @param {string} [uniqueName] - Optional sanitized, unique name to save the file as
+ * @param {string} [folderName] - Optional folder name to organize the file under
  * @returns {Promise<Object>} Object containing fileId, fileUrl, and compatibility keys (id, webViewLink)
  */
-async function uploadFileToDrive(file, uniqueName) {
+async function uploadFileToDrive(file, uniqueName, folderName) {
   if (!drive) {
     throw new Error('Google Drive integration is not configured or initialized.');
   }
@@ -72,10 +116,19 @@ async function uploadFileToDrive(file, uniqueName) {
     name: nameToSave,
   };
 
-  // Set parents if a specific folder ID is configured
-  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
-  if (folderId) {
-    fileMetadata.parents = [folderId];
+  // Determine parent folder ID
+  let parentFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+  if (parentFolderId && folderName) {
+    try {
+      parentFolderId = await getOrCreateFolder(folderName, parentFolderId);
+    } catch (folderError) {
+      console.error(`⚠️ Failed to resolve folder "${folderName}", uploading to parent folder instead:`, folderError.message);
+      parentFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    }
+  }
+
+  if (parentFolderId) {
+    fileMetadata.parents = [parentFolderId];
   }
 
   const media = {

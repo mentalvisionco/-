@@ -8,11 +8,12 @@ const googleDrive = require('./googleDrive');
 /**
  * Uploads a file to the active storage provider.
  * @param {Object} file - Multer file object
- * @param {string} uniqueName - Sanitized, unique name for the file
+ * @param {string} [uniqueName] - Sanitized, unique name for the file
+ * @param {string} [folderName] - Optional folder name to organize the file under
  * @returns {Promise<Object>} Object with { fileId, fileUrl }
  */
-async function uploadFile(file, uniqueName) {
-  return await googleDrive.uploadFileToDrive(file, uniqueName);
+async function uploadFile(file, uniqueName, folderName) {
+  return await googleDrive.uploadFileToDrive(file, uniqueName, folderName);
 }
 
 /**

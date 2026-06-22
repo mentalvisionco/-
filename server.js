@@ -597,8 +597,12 @@ app.post('/api/submissions', authenticateToken, requireStudent, uploadLimiter, (
 
       if (hasFile) {
         try {
+          const extension = path.extname(req.file.originalname);
+          const uniqueEnglishName = `submission-student-${req.user.id}-task-${taskId}-${Date.now()}${extension}`;
+          const folderName = `Task ${taskId}`;
+
           // Upload file to Google Drive using services/storage
-          const uploadResult = await uploadFile(req.file);
+          const uploadResult = await uploadFile(req.file, uniqueEnglishName, folderName);
           fileId = uploadResult.id;
           driveUrl = uploadResult.webViewLink;
           originalName = req.file.originalname;
@@ -842,8 +846,12 @@ app.put('/api/admin/submissions/:id/grade', authenticateToken, requireAdmin, (re
         }
 
         try {
+          const extension = path.extname(req.file.originalname);
+          const uniqueEnglishName = `feedback-submission-${req.params.id}-${Date.now()}${extension}`;
+          const folderName = 'Teacher Explanations';
+
           // Save new file to Google Drive
-          const uploadResult = await uploadFile(req.file);
+          const uploadResult = await uploadFile(req.file, uniqueEnglishName, folderName);
           fileId = uploadResult.id;
           driveUrl = uploadResult.webViewLink;
           originalName = req.file.originalname;

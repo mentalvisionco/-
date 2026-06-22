@@ -118,3 +118,9 @@
 {"level":"info","message":"Main Website: http://localhost:5000","service":"lms-platform","timestamp":"2026-06-20 14:24:06"}
 {"level":"info","message":"Health check: http://localhost:5000/health","service":"lms-platform","timestamp":"2026-06-20 14:24:06"}
 {"level":"info","message":"[Backup] Database backup completed successfully: auto-backup-2026-06-20T11-24-05-984Z.db","service":"lms-platform","timestamp":"2026-06-20 14:24:06"}
+{"level":"info","message":"Database connected successfully!","service":"lms-platform","timestamp":"2026-06-20 21:07:08"}
+{"level":"info","message":"[Backup] Starting automatic database backup...","service":"lms-platform","timestamp":"2026-06-20 21:07:08"}
+{"level":"info","message":"Server running perfectly on port 5000!","service":"lms-platform","timestamp":"2026-06-20 21:07:08"}
+{"level":"info","message":"Main Website: http://localhost:5000","service":"lms-platform","timestamp":"2026-06-20 21:07:08"}
+{"level":"info","message":"Health check: http://localhost:5000/health","service":"lms-platform","timestamp":"2026-06-20 21:07:08"}
+{"level":"info","message":"[Backup] Database backup completed successfully: auto-backup-2026-06-20T18-07-08-122Z.db","service":"lms-platform","timestamp":"2026-06-20 21:07:08"}
