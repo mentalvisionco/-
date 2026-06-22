@@ -597,15 +597,15 @@ app.post('/api/submissions', authenticateToken, requireStudent, uploadLimiter, (
 
       if (hasFile) {
         try {
-          const extension = path.extname(req.file.originalname);
-          const uniqueEnglishName = `submission-student-${req.user.id}-task-${taskId}-${Date.now()}${extension}`;
+          const ext = path.extname(req.file.originalname);
+          const uniqueEnglishName = `${path.basename(req.file.originalname, ext)} Task ${taskId}${ext}`;
           const folderName = `Task ${taskId}`;
 
           // Upload file to Google Drive using services/storage
           const uploadResult = await uploadFile(req.file, uniqueEnglishName, folderName);
           fileId = uploadResult.id;
           driveUrl = uploadResult.webViewLink;
-          originalName = req.file.originalname;
+          originalName = uniqueEnglishName;
           // Set fileUrl to the drive URL so it can be stored in the legacy field if needed
           if (!fileUrl) {
             fileUrl = driveUrl;
