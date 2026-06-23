@@ -11,6 +11,49 @@ import { getToken, API_URL } from '@/lib/api';
 const MAX_FILE_SIZE = 600 * 1024 * 1024; // 600MB — matches server limit
 const ACCEPTED_TYPES = '.pdf,.doc,.docx,.png,.jpg,.jpeg,.zip,.rar,.psd,.psb,.ai,.eps';
 
+const getGradeDetails = (grade) => {
+  if (grade === null || grade === undefined) return null;
+  const g = Number(grade);
+  if (g >= 40 && g <= 50) {
+    return {
+      text: 'تحفة فنية 😎👍',
+      gradient: 'linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(5, 150, 105, 0.03) 100%)',
+      borderColor: 'rgba(16, 185, 129, 0.3)',
+      color: '#10b981',
+    };
+  }
+  if (g >= 30 && g < 40) {
+    return {
+      text: 'الفنان الصغير',
+      gradient: 'linear-gradient(135deg, rgba(132, 204, 22, 0.12) 0%, rgba(101, 163, 13, 0.03) 100%)',
+      borderColor: 'rgba(132, 204, 22, 0.3)',
+      color: '#84cc16',
+    };
+  }
+  if (g >= 20 && g < 30) {
+    return {
+      text: 'حلو يجي منك 🤝',
+      gradient: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(217, 119, 6, 0.03) 100%)',
+      borderColor: 'rgba(245, 158, 11, 0.3)',
+      color: '#f59e0b',
+    };
+  }
+  if (g >= 10 && g < 20) {
+    return {
+      text: 'شغال مش وحش 👏',
+      gradient: 'linear-gradient(135deg, rgba(248, 113, 113, 0.12) 0%, rgba(220, 38, 38, 0.03) 100%)',
+      borderColor: 'rgba(248, 113, 113, 0.3)',
+      color: '#f87171',
+    };
+  }
+  return {
+    text: 'ارجح انك تشوف المحاضرة تاني 🙃',
+    gradient: 'linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(185, 28, 28, 0.03) 100%)',
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    color: '#ef4444',
+  };
+};
+
 export default function TaskCard({ task, submission, onSubmit, onCancel }) {
   const isCompleted = !!submission;
   const [url, setUrl] = useState(submission?.fileUrl || '');
@@ -114,7 +157,7 @@ export default function TaskCard({ task, submission, onSubmit, onCancel }) {
           {task.description && <p className={styles.desc}>{task.description}</p>}
         </div>
         <Badge variant={isCompleted ? (submission.grade !== null ? 'success' : 'warning') : 'danger'} dot>
-          {isCompleted ? (submission.grade !== null ? `تم التقييم: ${submission.grade} / 50` : 'تم التسليم (في انتظار التقييم)') : 'لم يتم التسليم'}
+          {isCompleted ? (submission.grade !== null ? 'تم التقييم' : 'تم التسليم (في انتظار التقييم)') : 'لم يتم التسليم'}
         </Badge>
       </div>
 
@@ -128,6 +171,41 @@ export default function TaskCard({ task, submission, onSubmit, onCancel }) {
       {isCompleted && (
         <div className={styles.subDetailBox}>
           <strong className={styles.subDetailTitle}>التسليم الحالي:</strong>
+
+          {/* Prominent Grade Display */}
+          {submission.grade !== null && (() => {
+            const gradeInfo = getGradeDetails(submission.grade);
+            if (!gradeInfo) return null;
+            return (
+              <div
+                className={styles.gradeDisplayCard}
+                style={{
+                  background: gradeInfo.gradient,
+                  borderColor: gradeInfo.borderColor
+                }}
+              >
+                <div className={styles.gradeInfoSection}>
+                  <span className={styles.gradeTextLabel}>تقييم المهمة</span>
+                  <div className={styles.gradeValueRow}>
+                    <span className={styles.gradeValueNum} style={{ color: gradeInfo.color }}>
+                      {submission.grade}
+                    </span>
+                    <span className={styles.gradeValueMax}>/ 50</span>
+                    <span
+                      className={styles.gradeStatusBadge}
+                      style={{
+                        backgroundColor: gradeInfo.gradient,
+                        borderColor: gradeInfo.borderColor,
+                        color: gradeInfo.color
+                      }}
+                    >
+                      {gradeInfo.text}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Submitted URL card */}
           {submission.fileUrl && (
@@ -199,8 +277,8 @@ export default function TaskCard({ task, submission, onSubmit, onCancel }) {
                 };
                 const fileId = submission.feedbackFileId || getDriveId(submission.feedbackFileUrl);
                 const token = getToken();
-                const displayUrl = fileId 
-                  ? `${API_URL}/files/${fileId}?token=${token}` 
+                const displayUrl = fileId
+                  ? `${API_URL}/files/${fileId}?token=${token}`
                   : submission.feedbackFileUrl;
 
                 return (
@@ -208,9 +286,9 @@ export default function TaskCard({ task, submission, onSubmit, onCancel }) {
                     <span className={styles.feedbackFileLabel}>الصورة التوضيحية المرفقة من المعلم:</span>
                     <a href={displayUrl} target="_blank" rel="noopener noreferrer" className={styles.feedbackImgLink}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img 
-                        src={displayUrl} 
-                        alt="توضيح المعلم" 
+                      <img
+                        src={displayUrl}
+                        alt="توضيح المعلم"
                         className={styles.feedbackImg}
                       />
                     </a>

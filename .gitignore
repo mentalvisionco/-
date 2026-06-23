@@ -11,5 +11,4 @@ credentials.json
 *.json
 credentials.json
 student-tasks-system-a3c35e8ac1b8.json
-logs/error-2026-05-25.log
-logs/combined-2026-05-25.log
+logs/

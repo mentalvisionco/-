@@ -509,10 +509,79 @@
   flex-wrap: wrap;
 }
 
+/* ——— Prominent Grade Display Card ——— */
+.gradeDisplayCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  border: 1px solid transparent;
+  backdrop-filter: blur(var(--glass-blur-light));
+  -webkit-backdrop-filter: blur(var(--glass-blur-light));
+  transition: all var(--duration-normal) var(--ease-out);
+  margin-bottom: var(--space-2);
+  gap: var(--space-4);
+}
+
+.gradeInfoSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.gradeTextLabel {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.gradeValueRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.gradeValueNum {
+  font-size: 2.25rem;
+  font-weight: 800;
+  line-height: 1;
+  font-family: var(--font-mono, monospace);
+}
+
+.gradeValueMax {
+  font-size: var(--font-base);
+  color: var(--text-tertiary);
+  font-weight: var(--weight-medium);
+}
+
+.gradeStatusBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 14px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+  border: 1px solid transparent;
+  backdrop-filter: blur(4px);
+}
+
 /* ================================================================
    RESPONSIVE
    ================================================================ */
 @media (max-width: 640px) {
+  .gradeDisplayCard {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .gradeValueNum {
+    font-size: 1.75rem;
+  }
+
   .card {
     padding: var(--space-5);
   }
