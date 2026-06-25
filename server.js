@@ -201,7 +201,7 @@ let isMaintenanceMode = false;
 app.use((req, res, next) => {
   if (isMaintenanceMode) {
     // Allow admin backup/import endpoints through
-    const allowedPaths = ['/api/admin/import', '/api/admin/import-db', '/api/admin/backups', '/health'];
+    const allowedPaths = ['/api/admin/import', '/api/admin/import-db', '/api/admin/validate-db', '/api/admin/backups', '/health'];
     if (allowedPaths.some(p => req.path.startsWith(p))) {
       return next();
     }
@@ -1685,12 +1685,131 @@ app.post('/api/admin/import-db', authenticateToken, requireAdmin, dbUpload.singl
   }
 });
 
+// --- Validate DB Backup (.db file) ---
+app.post('/api/admin/validate-db', authenticateToken, requireAdmin, dbUpload.single('dbfile'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'لم يتم رفع أي ملف' });
+    }
+
+    const Database = require('better-sqlite3');
+    const tempDbPath = req.file.path;
+    let tempDb = null;
+
+    try {
+      // Open the uploaded DB in read-only mode to prevent side effects
+      tempDb = new Database(tempDbPath, { readonly: true });
+
+      const tables = [
+        'users',
+        'lectures',
+        'tasks',
+        'submissions',
+        'ratings',
+        'attendance_sessions',
+        'attendance_records'
+      ];
+
+      const currentCounts = {};
+      const importCounts = {};
+
+      for (const table of tables) {
+        // Current active database counts
+        try {
+          const row = db.prepare(`SELECT COUNT(*) as count FROM ${table}`).get();
+          currentCounts[table] = row ? row.count : 0;
+        } catch (e) {
+          currentCounts[table] = 0;
+        }
+
+        // Uploaded backup database counts
+        try {
+          // Verify if table exists first to avoid crashes on old/corrupted schemas
+          const hasTable = tempDb.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(table);
+          if (hasTable) {
+            const row = tempDb.prepare(`SELECT COUNT(*) as count FROM ${table}`).get();
+            importCounts[table] = row ? row.count : 0;
+          } else {
+            importCounts[table] = 0;
+          }
+        } catch (e) {
+          importCounts[table] = 0;
+        }
+      }
+
+      // Add student count specifically
+      try {
+        const row = db.prepare(`SELECT COUNT(*) as count FROM users WHERE role = 'student'`).get();
+        currentCounts['students'] = row ? row.count : 0;
+      } catch (e) {
+        currentCounts['students'] = 0;
+      }
+
+      try {
+        const hasUsers = tempDb.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='users'`).get();
+        if (hasUsers) {
+          const row = tempDb.prepare(`SELECT COUNT(*) as count FROM users WHERE role = 'student'`).get();
+          importCounts['students'] = row ? row.count : 0;
+        } else {
+          importCounts['students'] = 0;
+        }
+      } catch (e) {
+        importCounts['students'] = 0;
+      }
+
+      tempDb.close();
+      tempDb = null;
+
+      // Delete the uploaded temporary file after inspection
+      try { fs.unlinkSync(tempDbPath); } catch (_) {}
+
+      res.json({
+        valid: true,
+        currentCounts,
+        importCounts
+      });
+
+    } catch (dbError) {
+      if (tempDb) {
+        try { tempDb.close(); } catch (_) {}
+      }
+      try { fs.unlinkSync(tempDbPath); } catch (_) {}
+      res.status(400).json({ error: 'ملف قاعدة البيانات المرفوع غير صالح أو تالف' });
+    }
+  } catch (error) {
+    logger.error('DB Validation error: %s', error.stack);
+    res.status(500).json({ error: 'حدث خطأ أثناء فحص ملف قاعدة البيانات' });
+  }
+});
+
+// --- Create Manual Backup ---
+app.post('/api/admin/backups', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    ensureBackupsDir();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `manual-backup-${timestamp}.db`;
+    const destPath = path.join(BACKUPS_DIR, filename);
+
+    logger.info(`[Backup] Starting manual database backup...`);
+    await dbBackup(destPath);
+    logger.info(`[Backup] Database backup completed successfully: ${filename}`);
+
+    logAudit(req.user.id, 'db_backup_create', { filename }, req);
+    cleanupOldBackups();
+
+    res.json({ message: 'تم إنشاء النسخة الاحتياطية بنجاح', filename });
+  } catch (error) {
+    logger.error('Manual backup error: %s', error.stack);
+    res.status(500).json({ error: 'فشل إنشاء النسخة الاحتياطية' });
+  }
+});
+
 // --- Backup History ---
 app.get('/api/admin/backups', authenticateToken, requireAdmin, (req, res) => {
   try {
     ensureBackupsDir();
     const files = fs.readdirSync(BACKUPS_DIR)
-      .filter(f => f.endsWith('.json') || f.endsWith('.db'))
+      .filter(f => f.endsWith('.db'))
       .map(filename => {
         const filePath = path.join(BACKUPS_DIR, filename);
         const stats = fs.statSync(filePath);
@@ -1713,7 +1832,7 @@ app.get('/api/admin/backups', authenticateToken, requireAdmin, (req, res) => {
 app.get('/api/admin/backups/:filename', authenticateToken, requireAdmin, (req, res) => {
   try {
     const filename = path.basename(req.params.filename); // Prevent path traversal
-    if (!filename.endsWith('.json') && !filename.endsWith('.db')) {
+    if (!filename.endsWith('.db')) {
       return res.status(400).json({ error: 'نوع الملف غير مدعوم' });
     }
 
@@ -1725,11 +1844,7 @@ app.get('/api/admin/backups/:filename', authenticateToken, requireAdmin, (req, r
     logAudit(req.user.id, 'db_backup_download', { filename }, req);
 
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    if (filename.endsWith('.json')) {
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    } else {
-      res.setHeader('Content-Type', 'application/octet-stream');
-    }
+    res.setHeader('Content-Type', 'application/octet-stream');
     res.sendFile(filePath);
   } catch (error) {
     logger.error('Backup download error: %s', error.stack);
@@ -1741,7 +1856,7 @@ app.get('/api/admin/backups/:filename', authenticateToken, requireAdmin, (req, r
 app.delete('/api/admin/backups/:filename', authenticateToken, requireAdmin, (req, res) => {
   try {
     const filename = path.basename(req.params.filename); // Prevent path traversal
-    if (!filename.endsWith('.json') && !filename.endsWith('.db')) {
+    if (!filename.endsWith('.db')) {
       return res.status(400).json({ error: 'نوع الملف غير مدعوم' });
     }
 
@@ -1806,7 +1921,7 @@ function cleanupOldBackups() {
 
     // Cleanup pre-import backup files (keep last 5)
     const preImportBackups = fs.readdirSync(BACKUPS_DIR)
-      .filter(f => f.startsWith('pre-import-'))
+      .filter(f => f.startsWith('pre-import-') && f.endsWith('.db'))
       .map(filename => {
         const filePath = path.join(BACKUPS_DIR, filename);
         const stats = fs.statSync(filePath);
