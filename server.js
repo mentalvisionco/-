@@ -906,7 +906,7 @@ app.get('/api/admin/students', authenticateToken, requireViewerOrAdmin, (req, re
       LEFT JOIN submissions s ON u.id = s.userId
       WHERE u.role = 'student'
       GROUP BY u.id
-      ORDER BY u.id DESC
+      ORDER BY u.name ASC
     `).all();
 
     res.json(students);

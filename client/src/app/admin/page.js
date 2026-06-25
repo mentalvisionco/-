@@ -46,7 +46,7 @@ export default function AdminDashboard() {
   const [lectures, setLectures] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('default');
+  const [sortBy, setSortBy] = useState('name-asc');
 
   // Lecture form
   const [showLectureForm, setShowLectureForm] = useState(false);
@@ -344,7 +344,6 @@ export default function AdminDashboard() {
                   onChange={e => setSortBy(e.target.value)}
                   aria-label="ترتيب الطلاب"
                 >
-                  <option value="default">الترتيب الافتراضي</option>
                   <option value="name-asc">الاسم (أ - ي)</option>
                   <option value="name-desc">الاسم (ي - أ)</option>
                   <option value="points-desc">النقاط (الأعلى أولاً)</option>
