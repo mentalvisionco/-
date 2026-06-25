@@ -14,7 +14,7 @@
 .content {
   flex: 1;
   padding: var(--space-10) var(--content-padding-x);
-  max-width: var(--content-max-width);
+  max-width: 100%;
   width: 100%;
   animation: contentReveal var(--duration-slower) var(--ease-out) both;
 }
