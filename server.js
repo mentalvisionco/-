@@ -10,23 +10,8 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const logger = require('./services/logger');
 
-// Load .env file manually if it exists to support local development environments without external dotenv package
-const envPath = path.join(__dirname, '.env');
-if (fs.existsSync(envPath)) {
-  const envContent = fs.readFileSync(envPath, 'utf-8');
-  envContent.split(/\r?\n/).forEach(line => {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) return;
-    const parts = trimmed.split('=');
-    if (parts.length >= 2) {
-      const key = parts[0].trim();
-      const val = parts.slice(1).join('=').trim().replace(/^['"]|['"]$/g, '');
-      if (key && process.env[key] === undefined) {
-        process.env[key] = val;
-      }
-    }
-  });
-}
+// Load .env file using dotenv
+require('dotenv').config();
 
 // Startup Environment Validation
 function validateEnv() {
@@ -64,7 +49,15 @@ function validateEnv() {
 }
 validateEnv();
 
-const { setupDB, dbGet, dbAll, dbRun, logAudit, dbBackup, dbTransaction, toggleForeignKeys, replaceDatabaseFile } = require('./database');
+const {
+  setupDB,
+  logAudit,
+  dbBackup,
+  dbTransaction,
+  toggleForeignKeys,
+  replaceDatabaseFile,
+  db: db
+} = require('./database');
 const multer = require('multer');
 const { uploadFile, deleteFile, getFileStream } = require('./services/storage');
 
@@ -251,7 +244,7 @@ app.use('/api/login', loginLimiter);
 // ==============================
 app.get('/health', (req, res) => {
   try {
-    const result = dbGet('SELECT 1 as ok');
+    const result = db.prepare('SELECT 1 as ok').get();
     if (!result || result.ok !== 1) throw new Error('DB check failed');
     res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
   } catch (err) {
@@ -322,12 +315,12 @@ function generateRefreshToken() {
 
 app.get('/api/setup-viewer', (req, res) => {
   try {
-    const existing = dbGet("SELECT id FROM users WHERE username = 'viewer'");
+    const existing = db.prepare("SELECT id FROM users WHERE username = 'viewer'").get();
     if (existing) {
       return res.json({ message: "حساب المشاهد موجود بالفعل (Username: viewer / Password: ViewerLms2026!)" });
     }
     const hash = bcrypt.hashSync('ViewerLms2026!', 10);
-    dbRun("INSERT INTO users (name, username, password, role) VALUES (?, ?, ?, ?)", ['مشاهد', 'viewer', hash, 'viewer']);
+    db.prepare("INSERT INTO users (name, username, password, role) VALUES (?, ?, ?, ?)").run(['مشاهد', 'viewer', hash, 'viewer']);
     res.json({ message: "تم إنشاء حساب المشاهد بنجاح! اسم المستخدم: viewer | كلمة المرور: ViewerLms2026!" });
   } catch (error) {
     res.status(500).json({ error: "حدث خطأ أثناء إنشاء الحساب: " + error.message });
@@ -344,7 +337,7 @@ app.post('/api/login', (req, res) => {
       return res.status(400).json({ error: 'اسم المستخدم وكلمة المرور مطلوبان' });
     }
 
-    const user = dbGet('SELECT * FROM users WHERE username = ?', [username]);
+    const user = db.prepare('SELECT * FROM users WHERE username = ?').get([username]);
     if (!user) {
       logAudit(null, 'login_failed', { username, error: 'User not found' }, req);
       return res.status(400).json({ error: 'بيانات الدخول غير صحيحة' });
@@ -367,10 +360,9 @@ app.post('/api/login', (req, res) => {
     const userAgent = req.headers['user-agent'] || null;
     const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
 
-    dbRun(
-      'INSERT INTO sessions (token, userId, userAgent, ipAddress, expiresAt) VALUES (?, ?, ?, ?, ?)',
-      [refreshToken, user.id, userAgent, ipAddress, expiresAt]
-    );
+    db.prepare(
+      'INSERT INTO sessions (token, userId, userAgent, ipAddress, expiresAt) VALUES (?, ?, ?, ?, ?)'
+    ).run([refreshToken, user.id, userAgent, ipAddress, expiresAt]);
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
@@ -418,7 +410,7 @@ app.post('/api/auth/refresh', (req, res) => {
   }
 
   try {
-    const session = dbGet('SELECT * FROM sessions WHERE token = ?', [oldRefreshToken]);
+    const session = db.prepare('SELECT * FROM sessions WHERE token = ?').get([oldRefreshToken]);
     if (!session) {
       logger.warn('Replay attack warning or session already revoked.');
       res.clearCookie('refreshToken');
@@ -426,14 +418,14 @@ app.post('/api/auth/refresh', (req, res) => {
     }
 
     if (new Date(session.expiresAt) < new Date()) {
-      dbRun('DELETE FROM sessions WHERE token = ?', [oldRefreshToken]);
+      db.prepare('DELETE FROM sessions WHERE token = ?').run([oldRefreshToken]);
       res.clearCookie('refreshToken');
       return res.status(401).json({ error: 'انتهت صلاحية الجلسة' });
     }
 
-    const user = dbGet('SELECT * FROM users WHERE id = ?', [session.userId]);
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get([session.userId]);
     if (!user) {
-      dbRun('DELETE FROM sessions WHERE token = ?', [oldRefreshToken]);
+      db.prepare('DELETE FROM sessions WHERE token = ?').run([oldRefreshToken]);
       res.clearCookie('refreshToken');
       return res.status(401).json({ error: 'مستخدم غير موجود' });
     }
@@ -445,14 +437,13 @@ app.post('/api/auth/refresh', (req, res) => {
     const newRefreshToken = generateRefreshToken();
     const newExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    dbRun('DELETE FROM sessions WHERE token = ?', [oldRefreshToken]);
+    db.prepare('DELETE FROM sessions WHERE token = ?').run([oldRefreshToken]);
 
     const userAgent = req.headers['user-agent'] || null;
     const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
-    dbRun(
-      'INSERT INTO sessions (token, userId, userAgent, ipAddress, expiresAt) VALUES (?, ?, ?, ?, ?)',
-      [newRefreshToken, user.id, userAgent, ipAddress, newExpiresAt]
-    );
+    db.prepare(
+      'INSERT INTO sessions (token, userId, userAgent, ipAddress, expiresAt) VALUES (?, ?, ?, ?, ?)'
+    ).run([newRefreshToken, user.id, userAgent, ipAddress, newExpiresAt]);
 
     res.cookie('refreshToken', newRefreshToken, {
       httpOnly: true,
@@ -472,11 +463,11 @@ app.post('/api/auth/logout', (req, res) => {
   const oldRefreshToken = req.cookies.refreshToken;
   if (oldRefreshToken) {
     try {
-      const session = dbGet('SELECT userId FROM sessions WHERE token = ?', [oldRefreshToken]);
+      const session = db.prepare('SELECT userId FROM sessions WHERE token = ?').get([oldRefreshToken]);
       if (session) {
         logAudit(session.userId, 'logout', null, req);
       }
-      dbRun('DELETE FROM sessions WHERE token = ?', [oldRefreshToken]);
+      db.prepare('DELETE FROM sessions WHERE token = ?').run([oldRefreshToken]);
     } catch (err) {
       logger.error('Logout error: %s', err.stack);
     }
@@ -487,7 +478,9 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/me', authenticateToken, (req, res) => {
   try {
-    const user = dbGet('SELECT id, name, username, role, points, fill_card_count, created_at FROM users WHERE id = ?', [req.user.id]);
+    const user = db.prepare(
+      'SELECT id, name, username, role, points, fill_card_count, created_at FROM users WHERE id = ?'
+    ).get([req.user.id]);
     if (!user) {
       return res.status(404).json({ error: 'المستخدم غير موجود' });
     }
@@ -508,7 +501,7 @@ app.put('/api/me/password', authenticateToken, (req, res) => {
       return res.status(400).json({ error: 'كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل' });
     }
 
-    const user = dbGet('SELECT password FROM users WHERE id = ?', [req.user.id]);
+    const user = db.prepare('SELECT password FROM users WHERE id = ?').get([req.user.id]);
     if (!user) {
       return res.status(404).json({ error: 'المستخدم غير موجود' });
     }
@@ -520,7 +513,7 @@ app.put('/api/me/password', authenticateToken, (req, res) => {
     }
 
     const hashedPassword = bcrypt.hashSync(newPassword, 10);
-    dbRun('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, req.user.id]);
+    db.prepare('UPDATE users SET password = ? WHERE id = ?').run([hashedPassword, req.user.id]);
 
     logAudit(req.user.id, 'password_change_success', null, req);
     res.json({ message: 'تم تغيير كلمة المرور بنجاح' });
@@ -535,13 +528,13 @@ app.put('/api/me/password', authenticateToken, (req, res) => {
 // =======================
 app.get('/api/lectures', authenticateToken, (req, res) => {
   try {
-    const lectures = dbAll(`
+    const lectures = db.prepare(`
       SELECT l.*, ROUND(AVG(r.rating), 1) as avgRating, COUNT(r.id) as ratingCount
       FROM lectures l
       LEFT JOIN ratings r ON l.id = r.lectureId
       GROUP BY l.id
       ORDER BY l.id DESC
-    `);
+    `).all();
     res.json(lectures);
   } catch (error) {
     logger.error('Lectures error: %s', error.stack);
@@ -585,7 +578,7 @@ app.post('/api/submissions', authenticateToken, requireStudent, uploadLimiter, (
       }
 
       // التحقق من وجود المهمة
-      const task = dbGet('SELECT id, title FROM tasks WHERE id = ?', [taskId]);
+      const task = db.prepare('SELECT id, title FROM tasks WHERE id = ?').get([taskId]);
       if (!task) {
         return res.status(404).json({ error: 'المهمة غير موجودة' });
       }
@@ -616,10 +609,9 @@ app.post('/api/submissions', authenticateToken, requireStudent, uploadLimiter, (
         }
       }
 
-      const existing = dbGet(
-        'SELECT id, uploadedFileId FROM submissions WHERE userId = ? AND taskId = ?',
-        [req.user.id, taskId]
-      );
+      const existing = db.prepare(
+        'SELECT id, uploadedFileId FROM submissions WHERE userId = ? AND taskId = ?'
+      ).get([req.user.id, taskId]);
 
       if (existing) {
         // If there was an old file in Drive, delete it
@@ -631,16 +623,18 @@ app.post('/api/submissions', authenticateToken, requireStudent, uploadLimiter, (
           }
         }
 
-        dbRun(
-          'UPDATE submissions SET fileUrl = ?, uploadedFileId = ?, uploadedFileUrl = ?, uploadedFileName = ?, storageProvider = ? WHERE id = ?',
+        db.prepare(
+          'UPDATE submissions SET fileUrl = ?, uploadedFileId = ?, uploadedFileUrl = ?, uploadedFileName = ?, storageProvider = ? WHERE id = ?'
+        ).run(
           [fileUrl, fileId || (hasFile ? null : existing.uploadedFileId), driveUrl || null, originalName || null, hasFile ? 'google-drive' : null, existing.id]
         );
 
         logAudit(req.user.id, 'submission_update', { taskId, taskTitle: task.title, fileUrl }, req);
         res.json({ message: 'تم تحديث التسليم بنجاح' });
       } else {
-        dbRun(
-          'INSERT INTO submissions (userId, taskId, fileUrl, uploadedFileId, uploadedFileUrl, uploadedFileName, storageProvider) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        db.prepare(
+          'INSERT INTO submissions (userId, taskId, fileUrl, uploadedFileId, uploadedFileUrl, uploadedFileName, storageProvider) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).run(
           [req.user.id, taskId, fileUrl, fileId, driveUrl, originalName, hasFile ? 'google-drive' : null]
         );
 
@@ -656,7 +650,7 @@ app.post('/api/submissions', authenticateToken, requireStudent, uploadLimiter, (
 
 app.get('/api/submissions/me', authenticateToken, (req, res) => {
   try {
-    const submissions = dbAll('SELECT * FROM submissions WHERE userId = ? ORDER BY id DESC', [req.user.id]);
+    const submissions = db.prepare('SELECT * FROM submissions WHERE userId = ? ORDER BY id DESC').all([req.user.id]);
     res.json(submissions);
   } catch (error) {
     logger.error('My submissions error: %s', error.stack);
@@ -671,11 +665,10 @@ app.delete('/api/submissions/:taskId', authenticateToken, requireStudent, async 
       return res.status(400).json({ error: 'معرف المهمة مطلوب' });
     }
 
-    const task = dbGet('SELECT title FROM tasks WHERE id = ?', [taskId]);
-    const existing = dbGet(
-      'SELECT id, grade, uploadedFileId, feedbackFileId FROM submissions WHERE userId = ? AND taskId = ?',
-      [req.user.id, taskId]
-    );
+    const task = db.prepare('SELECT title FROM tasks WHERE id = ?').get([taskId]);
+    const existing = db.prepare(
+      'SELECT id, grade, uploadedFileId, feedbackFileId FROM submissions WHERE userId = ? AND taskId = ?'
+    ).get([req.user.id, taskId]);
 
     if (!existing) {
       return res.status(404).json({ error: 'لم يتم العثور على تسليم لهذه المهمة' });
@@ -711,15 +704,15 @@ app.delete('/api/submissions/:taskId', authenticateToken, requireStudent, async 
     }
 
     if (existing.grade && existing.grade > 0) {
-      const student = dbGet('SELECT points FROM users WHERE id = ?', [req.user.id]);
+      const student = db.prepare('SELECT points FROM users WHERE id = ?').get([req.user.id]);
       if (student) {
         let newPoints = student.points - existing.grade;
         if (newPoints < 0) newPoints = 0;
-        dbRun('UPDATE users SET points = ? WHERE id = ?', [newPoints, req.user.id]);
+        db.prepare('UPDATE users SET points = ? WHERE id = ?').run([newPoints, req.user.id]);
       }
     }
 
-    dbRun('DELETE FROM submissions WHERE id = ?', [existing.id]);
+    db.prepare('DELETE FROM submissions WHERE id = ?').run([existing.id]);
     logAudit(req.user.id, 'submission_delete', { taskId, taskTitle: task ? task.title : 'Unknown' }, req);
     res.json({ message: 'تم إلغاء التسليم بنجاح' });
   } catch (error) {
@@ -770,7 +763,9 @@ app.get('/api/files/:fileId', authenticateToken, async (req, res) => {
 
 app.get('/api/leaderboard', authenticateToken, (req, res) => {
   try {
-    const students = dbAll('SELECT name, points FROM users WHERE role = ? ORDER BY points DESC LIMIT 10', ['student']);
+    const students = db.prepare(
+      'SELECT name, points FROM users WHERE role = ? ORDER BY points DESC LIMIT 10'
+    ).all(['student']);
     res.json(students);
   } catch (error) {
     logger.error('Leaderboard error: %s', error.stack);
@@ -780,13 +775,13 @@ app.get('/api/leaderboard', authenticateToken, (req, res) => {
 
 app.get('/api/admin/submissions', authenticateToken, requireViewerOrAdmin, (req, res) => {
   try {
-    const submissions = dbAll(`
+    const submissions = db.prepare(`
       SELECT s.*, u.name as studentName, t.title as taskTitle 
       FROM submissions s
       JOIN users u ON s.userId = u.id
       JOIN tasks t ON s.taskId = t.id
       ORDER BY s.id DESC
-    `);
+    `).all();
     res.json(submissions);
   } catch (error) {
     logger.error('Admin submissions error: %s', error.stack);
@@ -813,16 +808,16 @@ app.put('/api/admin/submissions/:id/grade', authenticateToken, requireAdmin, (re
         return res.status(400).json({ error: 'التقييم يجب أن يكون بين 0 و 50' });
       }
 
-      const sub = dbGet('SELECT * FROM submissions WHERE id = ?', [req.params.id]);
+      const sub = db.prepare('SELECT * FROM submissions WHERE id = ?').get([req.params.id]);
       if (!sub) return res.status(404).json({ error: 'التسليم غير موجود' });
 
-      const student = dbGet('SELECT points FROM users WHERE id = ?', [sub.userId]);
+      const student = db.prepare('SELECT points FROM users WHERE id = ?').get([sub.userId]);
       if (student) {
         const oldGrade = sub.grade || 0;
         let newPoints = student.points - oldGrade + newGrade;
         if (newPoints < 0) newPoints = 0;
 
-        dbRun('UPDATE users SET points = ? WHERE id = ?', [newPoints, sub.userId]);
+        db.prepare('UPDATE users SET points = ? WHERE id = ?').run([newPoints, sub.userId]);
       }
 
       const cleanFeedback = feedback ? sanitize(feedback) : null;
@@ -876,10 +871,9 @@ app.put('/api/admin/submissions/:id/grade', authenticateToken, requireAdmin, (re
         originalName = null;
       }
 
-      dbRun(
-        'UPDATE submissions SET grade = ?, feedback = ?, feedbackFileId = ?, feedbackFileUrl = ?, feedbackFileName = ? WHERE id = ?',
-        [newGrade, cleanFeedback, fileId, driveUrl, originalName, req.params.id]
-      );
+      db.prepare(
+        'UPDATE submissions SET grade = ?, feedback = ?, feedbackFileId = ?, feedbackFileUrl = ?, feedbackFileName = ? WHERE id = ?'
+      ).run([newGrade, cleanFeedback, fileId, driveUrl, originalName, req.params.id]);
 
       logAudit(req.user.id, 'grade_submission', { 
         submissionId: req.params.id, 
@@ -905,7 +899,7 @@ app.put('/api/admin/submissions/:id/grade', authenticateToken, requireAdmin, (re
 
 app.get('/api/admin/students', authenticateToken, requireViewerOrAdmin, (req, res) => {
   try {
-    const students = dbAll(`
+    const students = db.prepare(`
       SELECT u.id, u.name, u.username, u.points, u.fill_card_count,
              COUNT(s.id) as submissionsCount
       FROM users u 
@@ -913,7 +907,7 @@ app.get('/api/admin/students', authenticateToken, requireViewerOrAdmin, (req, re
       WHERE u.role = 'student'
       GROUP BY u.id
       ORDER BY u.id DESC
-    `);
+    `).all();
 
     res.json(students);
   } catch (error) {
@@ -925,14 +919,14 @@ app.get('/api/admin/students', authenticateToken, requireViewerOrAdmin, (req, re
 app.put('/api/admin/students/:id/fill-card', authenticateToken, requireAdmin, (req, res) => {
   try {
     const { action } = req.body; // 'increment' or 'decrement'
-    const student = dbGet('SELECT fill_card_count FROM users WHERE id = ? AND role = ?', [req.params.id, 'student']);
+    const student = db.prepare('SELECT fill_card_count FROM users WHERE id = ? AND role = ?').get([req.params.id, 'student']);
     if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
 
     let newCount = student.fill_card_count || 0;
     if (action === 'increment' && newCount < 12) newCount++;
     if (action === 'decrement' && newCount > 0) newCount--;
 
-    dbRun('UPDATE users SET fill_card_count = ? WHERE id = ?', [newCount, req.params.id]);
+    db.prepare('UPDATE users SET fill_card_count = ? WHERE id = ?').run([newCount, req.params.id]);
     logAudit(req.user.id, 'student_fill_card', { studentId: req.params.id, action, fillCardCount: newCount }, req);
     res.json({ message: 'تم التحديث بنجاح', fill_card_count: newCount });
   } catch (error) {
@@ -943,11 +937,11 @@ app.put('/api/admin/students/:id/fill-card', authenticateToken, requireAdmin, (r
 
 app.delete('/api/admin/students/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const student = dbGet('SELECT id, name, username FROM users WHERE id = ? AND role = ?', [req.params.id, 'student']);
+    const student = db.prepare('SELECT id, name, username FROM users WHERE id = ? AND role = ?').get([req.params.id, 'student']);
     if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
 
     // Clean up local teacher feedback files for all submissions of this student
-    const studentSubs = dbAll('SELECT feedbackFileId FROM submissions WHERE userId = ?', [req.params.id]);
+    const studentSubs = db.prepare('SELECT feedbackFileId FROM submissions WHERE userId = ?').all([req.params.id]);
     for (const sub of studentSubs) {
       if (sub.feedbackFileId) {
         if (String(sub.feedbackFileId).length > 20) {
@@ -961,10 +955,10 @@ app.delete('/api/admin/students/:id', authenticateToken, requireAdmin, async (re
       }
     }
 
-    dbRun('DELETE FROM attendance_records WHERE studentId = ?', [req.params.id]);
-    dbRun('DELETE FROM submissions WHERE userId = ?', [req.params.id]);
-    dbRun('DELETE FROM ratings WHERE userId = ?', [req.params.id]);
-    dbRun('DELETE FROM users WHERE id = ?', [req.params.id]);
+    db.prepare('DELETE FROM attendance_records WHERE studentId = ?').run([req.params.id]);
+    db.prepare('DELETE FROM submissions WHERE userId = ?').run([req.params.id]);
+    db.prepare('DELETE FROM ratings WHERE userId = ?').run([req.params.id]);
+    db.prepare('DELETE FROM users WHERE id = ?').run([req.params.id]);
 
     logAudit(req.user.id, 'student_delete', { studentId: req.params.id, username: student.username, name: student.name }, req);
     res.json({ message: 'تم حذف الطالب بنجاح' });
@@ -984,14 +978,15 @@ app.post('/api/admin/students', authenticateToken, requireAdmin, (req, res) => {
     const cleanUsername = username.trim();
     const cleanName = sanitize(name);
 
-    const existing = dbGet('SELECT id FROM users WHERE username = ?', [cleanUsername]);
+    const existing = db.prepare('SELECT id FROM users WHERE username = ?').get([cleanUsername]);
     if (existing) return res.status(400).json({ error: 'اسم المستخدم مستخدم بالفعل' });
 
     const hashedPassword = bcrypt.hashSync(password, 10);
     const p = parseInt(points) || 0;
 
-    dbRun('INSERT INTO users (name, username, password, role, points) VALUES (?, ?, ?, ?, ?)',
-      [cleanName, cleanUsername, hashedPassword, 'student', p]);
+    db.prepare(
+      'INSERT INTO users (name, username, password, role, points) VALUES (?, ?, ?, ?, ?)'
+    ).run([cleanName, cleanUsername, hashedPassword, 'student', p]);
 
     logAudit(req.user.id, 'student_create', { username: cleanUsername, name: cleanName, points: p }, req);
     res.json({ message: 'تم إضافة الطالب بنجاح' });
@@ -1010,10 +1005,10 @@ app.put('/api/admin/students/:id', authenticateToken, requireAdmin, (req, res) =
     const cleanUsername = username.trim();
     const cleanName = sanitize(name);
 
-    const student = dbGet('SELECT id FROM users WHERE id = ? AND role = ?', [req.params.id, 'student']);
+    const student = db.prepare('SELECT id FROM users WHERE id = ? AND role = ?').get([req.params.id, 'student']);
     if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
 
-    const existingUsername = dbGet('SELECT id FROM users WHERE username = ? AND id != ?', [cleanUsername, req.params.id]);
+    const existingUsername = db.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get([cleanUsername, req.params.id]);
     if (existingUsername) return res.status(400).json({ error: 'اسم المستخدم مستخدم من قبل مستخدم آخر' });
 
     const p = parseInt(points) || 0;
@@ -1021,11 +1016,11 @@ app.put('/api/admin/students/:id', authenticateToken, requireAdmin, (req, res) =
     if (password && password.trim().length > 0) {
       if (password.length < 8) return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل' });
       const hashedPassword = bcrypt.hashSync(password, 10);
-      dbRun('UPDATE users SET name = ?, username = ?, password = ?, points = ? WHERE id = ?',
-        [cleanName, cleanUsername, hashedPassword, p, req.params.id]);
+      db.prepare(
+        'UPDATE users SET name = ?, username = ?, password = ?, points = ? WHERE id = ?'
+      ).run([cleanName, cleanUsername, hashedPassword, p, req.params.id]);
     } else {
-      dbRun('UPDATE users SET name = ?, username = ?, points = ? WHERE id = ?',
-        [cleanName, cleanUsername, p, req.params.id]);
+      db.prepare('UPDATE users SET name = ?, username = ?, points = ? WHERE id = ?').run([cleanName, cleanUsername, p, req.params.id]);
     }
 
     logAudit(req.user.id, 'student_update', { studentId: req.params.id, username: cleanUsername, name: cleanName, points: p }, req);
@@ -1041,15 +1036,19 @@ app.post('/api/admin/lectures', authenticateToken, requireAdmin, (req, res) => {
     const { title, description, materialUrl, videoUrl } = req.body;
     if (!title || !materialUrl) return res.status(400).json({ error: 'العنوان ورابط الماتيريال مطلوبان' });
 
-    const maxOrder = dbGet('SELECT COALESCE(MAX(orderNum), 0) as m FROM lectures').m || 0;
-    const result = dbRun('INSERT INTO lectures (title, description, materialUrl, videoUrl, orderNum) VALUES (?, ?, ?, ?, ?)',
-      [sanitize(title), sanitize(description), sanitize(materialUrl), videoUrl ? sanitize(videoUrl) : null, maxOrder + 1]);
+    const maxOrder = db.prepare('SELECT COALESCE(MAX(orderNum), 0) as m FROM lectures').get().m || 0;
+    const result = db.prepare(
+      'INSERT INTO lectures (title, description, materialUrl, videoUrl, orderNum) VALUES (?, ?, ?, ?, ?)'
+    ).run(
+      [sanitize(title), sanitize(description), sanitize(materialUrl), videoUrl ? sanitize(videoUrl) : null, maxOrder + 1]
+    );
 
     // Auto-create attendance session linked to this lecture
     const lectureId = result.lastInsertRowid;
     const today = new Date().toISOString().split('T')[0];
-    dbRun(
-      'INSERT INTO attendance_sessions (title, description, lectureId, attendanceDate, bonusPoints, latePoints, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    db.prepare(
+      'INSERT INTO attendance_sessions (title, description, lectureId, attendanceDate, bonusPoints, latePoints, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(
       [sanitize(title), sanitize(description || ''), lectureId, today, 50, 35, req.user.id]
     );
 
@@ -1064,8 +1063,11 @@ app.post('/api/admin/lectures', authenticateToken, requireAdmin, (req, res) => {
 app.put('/api/admin/lectures/:id', authenticateToken, requireAdmin, (req, res) => {
   try {
     const { title, description, materialUrl, videoUrl } = req.body;
-    dbRun('UPDATE lectures SET title = ?, description = ?, materialUrl = ?, videoUrl = ? WHERE id = ?',
-      [sanitize(title), sanitize(description), sanitize(materialUrl), videoUrl ? sanitize(videoUrl) : null, req.params.id]);
+    db.prepare(
+      'UPDATE lectures SET title = ?, description = ?, materialUrl = ?, videoUrl = ? WHERE id = ?'
+    ).run(
+      [sanitize(title), sanitize(description), sanitize(materialUrl), videoUrl ? sanitize(videoUrl) : null, req.params.id]
+    );
 
     logAudit(req.user.id, 'lecture_update', { lectureId: req.params.id, title }, req);
     res.json({ message: 'تم التعديل بنجاح' });
@@ -1077,13 +1079,13 @@ app.put('/api/admin/lectures/:id', authenticateToken, requireAdmin, (req, res) =
 
 app.delete('/api/admin/lectures/:id', authenticateToken, requireAdmin, (req, res) => {
   try {
-    const lecture = dbGet('SELECT id, title, orderNum FROM lectures WHERE id = ?', [req.params.id]);
+    const lecture = db.prepare('SELECT id, title, orderNum FROM lectures WHERE id = ?').get([req.params.id]);
     if (!lecture) return res.status(404).json({ error: 'المحاضرة غير موجودة' });
 
     dbTransaction(() => {
-      dbRun('DELETE FROM ratings WHERE lectureId = ?', [req.params.id]);
-      dbRun('DELETE FROM lectures WHERE id = ?', [req.params.id]);
-      dbRun('UPDATE lectures SET orderNum = orderNum - 1 WHERE orderNum > ?', [lecture.orderNum]);
+      db.prepare('DELETE FROM ratings WHERE lectureId = ?').run([req.params.id]);
+      db.prepare('DELETE FROM lectures WHERE id = ?').run([req.params.id]);
+      db.prepare('UPDATE lectures SET orderNum = orderNum - 1 WHERE orderNum > ?').run([lecture.orderNum]);
     });
 
     logAudit(req.user.id, 'lecture_delete', { lectureId: req.params.id, title: lecture.title }, req);
@@ -1101,11 +1103,13 @@ app.post('/api/lectures/:id/rate', authenticateToken, requireStudent, (req, res)
     const lectureId = req.params.id;
     if (rating < 1 || rating > 5) return res.status(400).json({ error: 'التقييم يجب أن يكون من 1 لـ 5' });
 
-    const existing = dbGet('SELECT id FROM ratings WHERE userId = ? AND lectureId = ?', [req.user.id, lectureId]);
+    const existing = db.prepare('SELECT id FROM ratings WHERE userId = ? AND lectureId = ?').get([req.user.id, lectureId]);
     if (existing) {
-      dbRun('UPDATE ratings SET rating = ?, comment = ? WHERE id = ?', [rating, comment, existing.id]);
+      db.prepare('UPDATE ratings SET rating = ?, comment = ? WHERE id = ?').run([rating, comment, existing.id]);
     } else {
-      dbRun('INSERT INTO ratings (userId, lectureId, rating, comment) VALUES (?, ?, ?, ?)', [req.user.id, lectureId, rating, comment]);
+      db.prepare(
+        'INSERT INTO ratings (userId, lectureId, rating, comment) VALUES (?, ?, ?, ?)'
+      ).run([req.user.id, lectureId, rating, comment]);
     }
 
     logAudit(req.user.id, 'lecture_rate', { lectureId, rating }, req);
@@ -1118,7 +1122,7 @@ app.post('/api/lectures/:id/rate', authenticateToken, requireStudent, (req, res)
 
 app.get('/api/lectures/:id/my-rating', authenticateToken, (req, res) => {
   try {
-    const ratingData = dbGet('SELECT rating, comment FROM ratings WHERE userId = ? AND lectureId = ?', [req.user.id, req.params.id]);
+    const ratingData = db.prepare('SELECT rating, comment FROM ratings WHERE userId = ? AND lectureId = ?').get([req.user.id, req.params.id]);
     res.json({ rating: ratingData ? ratingData.rating : 0, comment: ratingData ? ratingData.comment : '' });
   } catch (err) {
     logger.error('Get my rating error: %s', err.stack);
@@ -1128,13 +1132,13 @@ app.get('/api/lectures/:id/my-rating', authenticateToken, (req, res) => {
 
 app.get('/api/admin/lectures/:id/ratings', authenticateToken, requireViewerOrAdmin, (req, res) => {
   try {
-    const ratings = dbAll(`
+    const ratings = db.prepare(`
       SELECT r.rating, r.comment, r.created_at, u.name as studentName 
       FROM ratings r
       JOIN users u ON r.userId = u.id
       WHERE r.lectureId = ?
       ORDER BY r.created_at DESC
-    `, [req.params.id]);
+    `).all([req.params.id]);
     res.json(ratings);
   } catch (err) {
     logger.error('Get lecture ratings error: %s', err.stack);
@@ -1147,7 +1151,7 @@ app.get('/api/admin/lectures/:id/ratings', authenticateToken, requireViewerOrAdm
 // =======================
 app.get('/api/tasks', authenticateToken, (req, res) => {
   try {
-    const tasks = dbAll('SELECT * FROM tasks ORDER BY created_at DESC');
+    const tasks = db.prepare('SELECT * FROM tasks ORDER BY created_at DESC').all();
     res.json(tasks);
   } catch (error) {
     logger.error('Tasks error: %s', error.stack);
@@ -1160,8 +1164,7 @@ app.post('/api/admin/tasks', authenticateToken, requireAdmin, (req, res) => {
     const { title, description, taskUrl } = req.body;
     if (!title || !taskUrl) return res.status(400).json({ error: 'العنوان ورابط المهمة مطلوبان' });
 
-    const result = dbRun('INSERT INTO tasks (title, description, taskUrl) VALUES (?, ?, ?)',
-      [sanitize(title), sanitize(description), sanitize(taskUrl)]);
+    const result = db.prepare('INSERT INTO tasks (title, description, taskUrl) VALUES (?, ?, ?)').run([sanitize(title), sanitize(description), sanitize(taskUrl)]);
 
     logAudit(req.user.id, 'task_create', { taskId: result.lastInsertRowid, title }, req);
     res.json({ message: 'تمت إضافة المهمة بنجاح' });
@@ -1174,8 +1177,7 @@ app.post('/api/admin/tasks', authenticateToken, requireAdmin, (req, res) => {
 app.put('/api/admin/tasks/:id', authenticateToken, requireAdmin, (req, res) => {
   try {
     const { title, description, taskUrl } = req.body;
-    dbRun('UPDATE tasks SET title = ?, description = ?, taskUrl = ? WHERE id = ?',
-      [sanitize(title), sanitize(description), sanitize(taskUrl), req.params.id]);
+    db.prepare('UPDATE tasks SET title = ?, description = ?, taskUrl = ? WHERE id = ?').run([sanitize(title), sanitize(description), sanitize(taskUrl), req.params.id]);
 
     logAudit(req.user.id, 'task_update', { taskId: req.params.id, title }, req);
     res.json({ message: 'تم التعديل بنجاح' });
@@ -1187,11 +1189,11 @@ app.put('/api/admin/tasks/:id', authenticateToken, requireAdmin, (req, res) => {
 
 app.delete('/api/admin/tasks/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const task = dbGet('SELECT id, title FROM tasks WHERE id = ?', [req.params.id]);
+    const task = db.prepare('SELECT id, title FROM tasks WHERE id = ?').get([req.params.id]);
     if (!task) return res.status(404).json({ error: 'المهمة غير موجودة' });
 
     // Clean up local teacher feedback files for all submissions of this task
-    const taskSubs = dbAll('SELECT feedbackFileId FROM submissions WHERE taskId = ?', [req.params.id]);
+    const taskSubs = db.prepare('SELECT feedbackFileId FROM submissions WHERE taskId = ?').all([req.params.id]);
     for (const sub of taskSubs) {
       if (sub.feedbackFileId) {
         if (String(sub.feedbackFileId).length > 20) {
@@ -1205,8 +1207,8 @@ app.delete('/api/admin/tasks/:id', authenticateToken, requireAdmin, async (req, 
       }
     }
 
-    dbRun('DELETE FROM submissions WHERE taskId = ?', [req.params.id]);
-    dbRun('DELETE FROM tasks WHERE id = ?', [req.params.id]);
+    db.prepare('DELETE FROM submissions WHERE taskId = ?').run([req.params.id]);
+    db.prepare('DELETE FROM tasks WHERE id = ?').run([req.params.id]);
 
     logAudit(req.user.id, 'task_delete', { taskId: req.params.id, title: task.title }, req);
     res.json({ message: 'تم حذف المهمة بنجاح' });
@@ -1223,7 +1225,7 @@ app.delete('/api/admin/tasks/:id', authenticateToken, requireAdmin, async (req, 
 // --- List all sessions with stats ---
 app.get('/api/admin/attendance/sessions', authenticateToken, requireViewerOrAdmin, (req, res) => {
   try {
-    const sessions = dbAll(`
+    const sessions = db.prepare(`
       SELECT s.*,
              u.name as creatorName,
              l.title as lectureTitle,
@@ -1237,7 +1239,7 @@ app.get('/api/admin/attendance/sessions', authenticateToken, requireViewerOrAdmi
       LEFT JOIN attendance_records r ON s.id = r.sessionId
       GROUP BY s.id
       ORDER BY s.attendanceDate DESC, s.created_at DESC
-    `);
+    `).all();
     res.json(sessions);
   } catch (error) {
     logger.error('Attendance sessions error: %s', error.stack);
@@ -1261,12 +1263,13 @@ app.post('/api/admin/attendance/sessions', authenticateToken, requireAdmin, (req
 
     const lid = lectureId ? parseInt(lectureId) : null;
     if (lid) {
-      const lecture = dbGet('SELECT id FROM lectures WHERE id = ?', [lid]);
+      const lecture = db.prepare('SELECT id FROM lectures WHERE id = ?').get([lid]);
       if (!lecture) return res.status(400).json({ error: 'المحاضرة المحددة غير موجودة' });
     }
 
-    const result = dbRun(
-      'INSERT INTO attendance_sessions (title, description, notes, lectureId, attendanceDate, bonusPoints, latePoints, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    const result = db.prepare(
+      'INSERT INTO attendance_sessions (title, description, notes, lectureId, attendanceDate, bonusPoints, latePoints, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(
       [sanitize(title), sanitize(description || ''), sanitize(notes || ''), lid, attendanceDate, bp, lp, req.user.id]
     );
 
@@ -1281,7 +1284,7 @@ app.post('/api/admin/attendance/sessions', authenticateToken, requireAdmin, (req
 // --- Update session ---
 app.put('/api/admin/attendance/sessions/:id', authenticateToken, requireAdmin, (req, res) => {
   try {
-    const session = dbGet('SELECT * FROM attendance_sessions WHERE id = ?', [req.params.id]);
+    const session = db.prepare('SELECT * FROM attendance_sessions WHERE id = ?').get([req.params.id]);
     if (!session) return res.status(404).json({ error: 'الجلسة غير موجودة' });
     if (session.isLocked) return res.status(400).json({ error: 'الجلسة مقفلة — يرجى فتحها أولاً قبل التعديل' });
 
@@ -1298,28 +1301,31 @@ app.put('/api/admin/attendance/sessions/:id', authenticateToken, requireAdmin, (
 
     // If points changed, recalculate for all present/late students
     if (bp !== session.bonusPoints || lp !== session.latePoints) {
-      const records = dbAll('SELECT * FROM attendance_records WHERE sessionId = ? AND status IN (?, ?)', [req.params.id, 'present', 'late']);
+      const records = db.prepare(
+        'SELECT * FROM attendance_records WHERE sessionId = ? AND status IN (?, ?)'
+      ).all([req.params.id, 'present', 'late']);
       for (const rec of records) {
         const targetPoints = rec.status === 'present' ? bp : lp;
         const diff = targetPoints - rec.awardedPoints;
         if (diff !== 0) {
           // Safety: prevent negative points
           if (diff < 0) {
-            const student = dbGet('SELECT points FROM users WHERE id = ?', [rec.studentId]);
+            const student = db.prepare('SELECT points FROM users WHERE id = ?').get([rec.studentId]);
             if (student) {
               const newPoints = Math.max(0, student.points + diff);
-              dbRun('UPDATE users SET points = ? WHERE id = ?', [newPoints, rec.studentId]);
+              db.prepare('UPDATE users SET points = ? WHERE id = ?').run([newPoints, rec.studentId]);
             }
           } else {
-            dbRun('UPDATE users SET points = points + ? WHERE id = ?', [diff, rec.studentId]);
+            db.prepare('UPDATE users SET points = points + ? WHERE id = ?').run([diff, rec.studentId]);
           }
-          dbRun('UPDATE attendance_records SET awardedPoints = ? WHERE id = ?', [targetPoints, rec.id]);
+          db.prepare('UPDATE attendance_records SET awardedPoints = ? WHERE id = ?').run([targetPoints, rec.id]);
         }
       }
     }
 
-    dbRun(
-      'UPDATE attendance_sessions SET title = ?, description = ?, notes = ?, lectureId = ?, attendanceDate = ?, bonusPoints = ?, latePoints = ? WHERE id = ?',
+    db.prepare(
+      'UPDATE attendance_sessions SET title = ?, description = ?, notes = ?, lectureId = ?, attendanceDate = ?, bonusPoints = ?, latePoints = ? WHERE id = ?'
+    ).run(
       [sanitize(title), sanitize(description || ''), sanitize(notes || ''), lid, attendanceDate || session.attendanceDate, bp, lp, req.params.id]
     );
 
@@ -1334,21 +1340,23 @@ app.put('/api/admin/attendance/sessions/:id', authenticateToken, requireAdmin, (
 // --- Delete session (with full points rollback) ---
 app.delete('/api/admin/attendance/sessions/:id', authenticateToken, requireAdmin, (req, res) => {
   try {
-    const session = dbGet('SELECT * FROM attendance_sessions WHERE id = ?', [req.params.id]);
+    const session = db.prepare('SELECT * FROM attendance_sessions WHERE id = ?').get([req.params.id]);
     if (!session) return res.status(404).json({ error: 'الجلسة غير موجودة' });
 
     // Rollback all awarded points safely
-    const records = dbAll('SELECT * FROM attendance_records WHERE sessionId = ? AND awardedPoints > 0', [req.params.id]);
+    const records = db.prepare(
+      'SELECT * FROM attendance_records WHERE sessionId = ? AND awardedPoints > 0'
+    ).all([req.params.id]);
     for (const rec of records) {
-      const student = dbGet('SELECT points FROM users WHERE id = ?', [rec.studentId]);
+      const student = db.prepare('SELECT points FROM users WHERE id = ?').get([rec.studentId]);
       if (student) {
         const newPoints = Math.max(0, student.points - rec.awardedPoints);
-        dbRun('UPDATE users SET points = ? WHERE id = ?', [newPoints, rec.studentId]);
+        db.prepare('UPDATE users SET points = ? WHERE id = ?').run([newPoints, rec.studentId]);
       }
     }
 
     // CASCADE will delete attendance_records
-    dbRun('DELETE FROM attendance_sessions WHERE id = ?', [req.params.id]);
+    db.prepare('DELETE FROM attendance_sessions WHERE id = ?').run([req.params.id]);
 
     logAudit(req.user.id, 'attendance_session_delete', { sessionId: req.params.id, title: session.title }, req);
     res.json({ message: 'تم حذف الجلسة واستعادة النقاط بنجاح' });
@@ -1361,11 +1369,11 @@ app.delete('/api/admin/attendance/sessions/:id', authenticateToken, requireAdmin
 // --- Lock/Unlock session ---
 app.put('/api/admin/attendance/sessions/:id/lock', authenticateToken, requireAdmin, (req, res) => {
   try {
-    const session = dbGet('SELECT * FROM attendance_sessions WHERE id = ?', [req.params.id]);
+    const session = db.prepare('SELECT * FROM attendance_sessions WHERE id = ?').get([req.params.id]);
     if (!session) return res.status(404).json({ error: 'الجلسة غير موجودة' });
 
     const newLocked = session.isLocked ? 0 : 1;
-    dbRun('UPDATE attendance_sessions SET isLocked = ? WHERE id = ?', [newLocked, req.params.id]);
+    db.prepare('UPDATE attendance_sessions SET isLocked = ? WHERE id = ?').run([newLocked, req.params.id]);
 
     logAudit(req.user.id, newLocked ? 'attendance_session_lock' : 'attendance_session_unlock', { sessionId: req.params.id, title: session.title }, req);
     res.json({
@@ -1381,18 +1389,18 @@ app.put('/api/admin/attendance/sessions/:id/lock', authenticateToken, requireAdm
 // --- Get records for a session ---
 app.get('/api/admin/attendance/sessions/:id/records', authenticateToken, requireViewerOrAdmin, (req, res) => {
   try {
-    const session = dbGet('SELECT * FROM attendance_sessions WHERE id = ?', [req.params.id]);
+    const session = db.prepare('SELECT * FROM attendance_sessions WHERE id = ?').get([req.params.id]);
     if (!session) return res.status(404).json({ error: 'الجلسة غير موجودة' });
 
     // Get all students with their attendance status for this session
-    const students = dbAll(`
+    const students = db.prepare(`
       SELECT u.id, u.name, u.username, u.points,
              ar.status, ar.awardedPoints, ar.notes, ar.id as recordId
       FROM users u
       LEFT JOIN attendance_records ar ON u.id = ar.studentId AND ar.sessionId = ?
       WHERE u.role = 'student'
       ORDER BY u.name ASC
-    `, [req.params.id]);
+    `).all([req.params.id]);
 
     res.json({ session, students });
   } catch (error) {
@@ -1404,7 +1412,7 @@ app.get('/api/admin/attendance/sessions/:id/records', authenticateToken, require
 // --- Bulk mark attendance ---
 app.post('/api/admin/attendance/sessions/:id/records', authenticateToken, requireAdmin, (req, res) => {
   try {
-    const session = dbGet('SELECT * FROM attendance_sessions WHERE id = ?', [req.params.id]);
+    const session = db.prepare('SELECT * FROM attendance_sessions WHERE id = ?').get([req.params.id]);
     if (!session) return res.status(404).json({ error: 'الجلسة غير موجودة' });
     if (session.isLocked) return res.status(400).json({ error: 'الجلسة مقفلة — يرجى فتحها أولاً' });
 
@@ -1424,11 +1432,11 @@ app.post('/api/admin/attendance/sessions/:id/records', authenticateToken, requir
       if (!studentId || !validStatuses.includes(status)) continue;
 
       // Check if student exists
-      const student = dbGet('SELECT id, points FROM users WHERE id = ? AND role = ?', [studentId, 'student']);
+      const student = db.prepare('SELECT id, points FROM users WHERE id = ? AND role = ?').get([studentId, 'student']);
       if (!student) continue;
 
       // Check existing record
-      const existing = dbGet('SELECT * FROM attendance_records WHERE sessionId = ? AND studentId = ?', [req.params.id, studentId]);
+      const existing = db.prepare('SELECT * FROM attendance_records WHERE sessionId = ? AND studentId = ?').get([req.params.id, studentId]);
 
       if (existing) {
         // Status changed — recalculate points
@@ -1436,30 +1444,31 @@ app.post('/api/admin/attendance/sessions/:id/records', authenticateToken, requir
           // Remove old points if had any
           if (existing.awardedPoints > 0) {
             const newPts = Math.max(0, student.points - existing.awardedPoints);
-            dbRun('UPDATE users SET points = ? WHERE id = ?', [newPts, studentId]);
+            db.prepare('UPDATE users SET points = ? WHERE id = ?').run([newPts, studentId]);
             pointsChanged -= existing.awardedPoints;
           }
 
           // Award new points if present or late
           const newAward = status === 'present' ? session.bonusPoints : (status === 'late' ? session.latePoints : 0);
           if (newAward > 0) {
-            dbRun('UPDATE users SET points = points + ? WHERE id = ?', [newAward, studentId]);
+            db.prepare('UPDATE users SET points = points + ? WHERE id = ?').run([newAward, studentId]);
             pointsChanged += newAward;
           }
 
-          dbRun('UPDATE attendance_records SET status = ?, awardedPoints = ?, notes = ? WHERE id = ?', [status, newAward, notes, existing.id]);
+          db.prepare(
+            'UPDATE attendance_records SET status = ?, awardedPoints = ?, notes = ? WHERE id = ?'
+          ).run([status, newAward, notes, existing.id]);
         } else if (existing.notes !== notes) {
-          dbRun('UPDATE attendance_records SET notes = ? WHERE id = ?', [notes, existing.id]);
+          db.prepare('UPDATE attendance_records SET notes = ? WHERE id = ?').run([notes, existing.id]);
         }
       } else {
         // New record
         const award = status === 'present' ? session.bonusPoints : (status === 'late' ? session.latePoints : 0);
-        dbRun(
-          'INSERT INTO attendance_records (sessionId, studentId, status, awardedPoints, notes) VALUES (?, ?, ?, ?, ?)',
-          [req.params.id, studentId, status, award, notes]
-        );
+        db.prepare(
+          'INSERT INTO attendance_records (sessionId, studentId, status, awardedPoints, notes) VALUES (?, ?, ?, ?, ?)'
+        ).run([req.params.id, studentId, status, award, notes]);
         if (award > 0) {
-          dbRun('UPDATE users SET points = points + ? WHERE id = ?', [award, studentId]);
+          db.prepare('UPDATE users SET points = points + ? WHERE id = ?').run([award, studentId]);
           pointsChanged += award;
         }
       }
@@ -1476,17 +1485,19 @@ app.post('/api/admin/attendance/sessions/:id/records', authenticateToken, requir
 // --- Attendance analytics ---
 app.get('/api/admin/attendance/analytics', authenticateToken, requireViewerOrAdmin, (req, res) => {
   try {
-    const totalSessions = dbGet('SELECT COUNT(*) as count FROM attendance_sessions').count;
-    const totalRecords = dbGet('SELECT COUNT(*) as count FROM attendance_records').count;
-    const presentCount = dbGet("SELECT COUNT(*) as count FROM attendance_records WHERE status = 'present'").count;
-    const lateCount = dbGet("SELECT COUNT(*) as count FROM attendance_records WHERE status = 'late'").count;
-    const absentCount = dbGet("SELECT COUNT(*) as count FROM attendance_records WHERE status = 'absent'").count;
-    const totalAwarded = dbGet('SELECT COALESCE(SUM(awardedPoints), 0) as total FROM attendance_records').total;
+    const totalSessions = db.prepare('SELECT COUNT(*) as count FROM attendance_sessions').get().count;
+    const totalRecords = db.prepare('SELECT COUNT(*) as count FROM attendance_records').get().count;
+    const presentCount = db.prepare(
+      "SELECT COUNT(*) as count FROM attendance_records WHERE status = 'present'"
+    ).get().count;
+    const lateCount = db.prepare("SELECT COUNT(*) as count FROM attendance_records WHERE status = 'late'").get().count;
+    const absentCount = db.prepare("SELECT COUNT(*) as count FROM attendance_records WHERE status = 'absent'").get().count;
+    const totalAwarded = db.prepare('SELECT COALESCE(SUM(awardedPoints), 0) as total FROM attendance_records').get().total;
 
     const attendanceRate = totalRecords > 0 ? Math.round(((presentCount + lateCount) / totalRecords) * 100) : 0;
 
     // Top attendees
-    const topStudents = dbAll(`
+    const topStudents = db.prepare(`
       SELECT u.id, u.name,
              COUNT(CASE WHEN ar.status IN ('present', 'late') THEN 1 END) as attended,
              COUNT(ar.id) as totalSessions,
@@ -1497,10 +1508,10 @@ app.get('/api/admin/attendance/analytics', authenticateToken, requireViewerOrAdm
       GROUP BY u.id
       ORDER BY attended DESC
       LIMIT 10
-    `);
+    `).all();
 
     // Lowest attendees
-    const lowestStudents = dbAll(`
+    const lowestStudents = db.prepare(`
       SELECT u.id, u.name,
              COUNT(CASE WHEN ar.status IN ('present', 'late') THEN 1 END) as attended,
              COUNT(ar.id) as totalSessions
@@ -1511,10 +1522,10 @@ app.get('/api/admin/attendance/analytics', authenticateToken, requireViewerOrAdm
       HAVING totalSessions > 0
       ORDER BY attended ASC
       LIMIT 10
-    `);
+    `).all();
 
     // Recent sessions trend (last 10 sessions)
-    const trends = dbAll(`
+    const trends = db.prepare(`
       SELECT s.id, s.title, s.attendanceDate,
              COUNT(CASE WHEN r.status IN ('present', 'late') THEN 1 END) as present,
              COUNT(CASE WHEN r.status = 'absent' THEN 1 END) as absent,
@@ -1524,7 +1535,7 @@ app.get('/api/admin/attendance/analytics', authenticateToken, requireViewerOrAdm
       GROUP BY s.id
       ORDER BY s.attendanceDate DESC
       LIMIT 10
-    `);
+    `).all();
 
     res.json({
       totalSessions,
@@ -1547,14 +1558,14 @@ app.get('/api/admin/attendance/analytics', authenticateToken, requireViewerOrAdm
 // --- Student: my attendance ---
 app.get('/api/attendance/me', authenticateToken, (req, res) => {
   try {
-    const records = dbAll(`
+    const records = db.prepare(`
       SELECT ar.status, ar.awardedPoints, ar.created_at,
              s.id as sessionId, s.title, s.attendanceDate, s.bonusPoints, s.notes
       FROM attendance_records ar
       JOIN attendance_sessions s ON ar.sessionId = s.id
       WHERE ar.studentId = ?
       ORDER BY s.attendanceDate DESC
-    `, [req.user.id]);
+    `).all([req.user.id]);
 
     const totalSessions = records.length;
     const attended = records.filter(r => r.status === 'present' || r.status === 'late').length;
@@ -1595,405 +1606,10 @@ function sanitizeBackupString(val) {
   return val.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').trim();
 }
 
-function validateBackupSchema(data) {
-  const errors = [];
-
-  if (!data || typeof data !== 'object') {
-    return { valid: false, errors: ['ملف النسخة الاحتياطية غير صالح'] };
-  }
-  if (!data.meta || data.meta.platform !== 'lms-platform') {
-    errors.push('الملف لا يتبع تنسيق منصة LMS');
-  }
-  if (!data.meta?.version) {
-    errors.push('إصدار النسخة الاحتياطية مفقود');
-  }
-  if (!data.data || typeof data.data !== 'object') {
-    errors.push('بيانات النسخة الاحتياطية مفقودة');
-  }
-
-  const requiredTables = ['users', 'lectures', 'tasks', 'submissions', 'ratings'];
-  for (const table of requiredTables) {
-    if (!Array.isArray(data.data?.[table])) {
-      errors.push(`جدول "${table}" مفقود أو غير صالح`);
-    }
-  }
-
-  // Attendance tables are optional for backward compatibility
-  if (data.data?.attendance_sessions && !Array.isArray(data.data.attendance_sessions)) {
-    errors.push('جدول "attendance_sessions" غير صالح');
-  }
-  if (data.data?.attendance_records && !Array.isArray(data.data.attendance_records)) {
-    errors.push('جدول "attendance_records" غير صالح');
-  }
-
-  if (errors.length > 0) return { valid: false, errors };
-
-  // Validate individual records
-  const warnings = [];
-
-  // Build ID sets for FK integrity checks
-  const userIds = new Set(data.data.users.map(u => u.id));
-  const lectureIds = new Set(data.data.lectures.map(l => l.id));
-  const taskIds = new Set(data.data.tasks.map(t => t.id));
-  const sessionIds = new Set((data.data.attendance_sessions || []).map(s => s.id));
-
-  for (const user of data.data.users) {
-    if (!user.id || !user.name || (!user.username && !user.email) || !user.password || !user.role) {
-      errors.push(`مستخدم غير مكتمل البيانات (ID: ${user.id || '?'})`);
-    }
-    if (user.role && !['student', 'admin', 'viewer'].includes(user.role)) {
-      warnings.push(`دور غير معروف "${user.role}" للمستخدم ${user.name || user.id}`);
-    }
-  }
-
-  for (const lec of data.data.lectures) {
-    if (!lec.id || !lec.title) {
-      errors.push(`محاضرة غير مكتملة البيانات (ID: ${lec.id || '?'})`);
-    }
-  }
-
-  for (const task of data.data.tasks) {
-    if (!task.id || !task.title || !task.taskUrl) {
-      errors.push(`مهمة غير مكتملة البيانات (ID: ${task.id || '?'})`);
-    }
-  }
-
-  for (const sub of data.data.submissions) {
-    if (!sub.id || !sub.userId || !sub.taskId || !sub.fileUrl) {
-      errors.push(`تسليم غير مكتمل البيانات (ID: ${sub.id || '?'})`);
-    }
-    // FK integrity: check userId and taskId exist in backup data
-    if (sub.userId && !userIds.has(sub.userId)) {
-      warnings.push(`تسليم #${sub.id} يشير لمستخدم غير موجود (userId: ${sub.userId})`);
-    }
-    if (sub.taskId && !taskIds.has(sub.taskId)) {
-      warnings.push(`تسليم #${sub.id} يشير لمهمة غير موجودة (taskId: ${sub.taskId})`);
-    }
-  }
-
-  for (const r of data.data.ratings) {
-    if (!r.id || !r.userId || !r.lectureId || !r.rating) {
-      errors.push(`تقييم غير مكتمل البيانات (ID: ${r.id || '?'})`);
-    }
-    if (r.rating && (r.rating < 1 || r.rating > 5)) {
-      warnings.push(`تقييم خارج النطاق (${r.rating}) للتقييم ${r.id}`);
-    }
-    // FK integrity: check userId and lectureId exist
-    if (r.userId && !userIds.has(r.userId)) {
-      warnings.push(`تقييم #${r.id} يشير لمستخدم غير موجود (userId: ${r.userId})`);
-    }
-    if (r.lectureId && !lectureIds.has(r.lectureId)) {
-      warnings.push(`تقييم #${r.id} يشير لمحاضرة غير موجودة (lectureId: ${r.lectureId})`);
-    }
-  }
-
-  // FK integrity for attendance records
-  for (const ar of (data.data.attendance_records || [])) {
-    if (ar.sessionId && !sessionIds.has(ar.sessionId)) {
-      warnings.push(`سجل حضور #${ar.id} يشير لجلسة غير موجودة (sessionId: ${ar.sessionId})`);
-    }
-    if (ar.studentId && !userIds.has(ar.studentId)) {
-      warnings.push(`سجل حضور #${ar.id} يشير لطالب غير موجود (studentId: ${ar.studentId})`);
-    }
-  }
-
-  for (const as of (data.data.attendance_sessions || [])) {
-    if (as.createdBy && !userIds.has(as.createdBy)) {
-      warnings.push(`جلسة حضور #${as.id} يشير لمنشئ غير موجود (createdBy: ${as.createdBy})`);
-    }
-  }
-
-  return { valid: errors.length === 0, errors, warnings };
-}
-
-function buildExportPayload(scope = 'full') {
-  const payload = {
-    meta: {
-      platform: 'lms-platform',
-      version: BACKUP_SCHEMA_VERSION,
-      schemaVersion: BACKUP_SCHEMA_VERSION,
-      exportedAt: new Date().toISOString(),
-      scope,
-      tables: {}
-    },
-    data: {}
-  };
-
-  if (scope === 'full' || scope === 'users') {
-    payload.data.users = dbAll('SELECT * FROM users');
-    payload.meta.tables.users = payload.data.users.length;
-  }
-  if (scope === 'full' || scope === 'content') {
-    payload.data.lectures = dbAll('SELECT * FROM lectures');
-    payload.data.tasks = dbAll('SELECT * FROM tasks');
-    payload.meta.tables.lectures = payload.data.lectures.length;
-    payload.meta.tables.tasks = payload.data.tasks.length;
-  }
-  if (scope === 'full' || scope === 'submissions') {
-    payload.data.submissions = dbAll('SELECT * FROM submissions');
-    payload.data.ratings = dbAll('SELECT * FROM ratings');
-    payload.meta.tables.submissions = payload.data.submissions.length;
-    payload.meta.tables.ratings = payload.data.ratings.length;
-  }
-  if (scope === 'full' || scope === 'attendance') {
-    payload.data.attendance_sessions = dbAll('SELECT * FROM attendance_sessions');
-    payload.data.attendance_records = dbAll('SELECT * FROM attendance_records');
-    payload.meta.tables.attendance_sessions = payload.data.attendance_sessions.length;
-    payload.meta.tables.attendance_records = payload.data.attendance_records.length;
-  }
-  // Include audit_logs in full exports
-  if (scope === 'full') {
-    payload.data.audit_logs = dbAll('SELECT * FROM audit_logs');
-    payload.meta.tables.audit_logs = payload.data.audit_logs.length;
-  }
-
-  // For non-full scopes, fill missing tables with empty arrays for schema compatibility
-  if (scope !== 'full') {
-    const allTables = ['users', 'lectures', 'tasks', 'submissions', 'ratings', 'attendance_sessions', 'attendance_records'];
-    for (const t of allTables) {
-      if (!payload.data[t]) payload.data[t] = [];
-      if (payload.meta.tables[t] === undefined) payload.meta.tables[t] = 0;
-    }
-  }
-
-  return payload;
-}
-
-// --- Export ---
-app.get('/api/admin/export', authenticateToken, requireAdmin, (req, res) => {
-  try {
-    const scope = ['full', 'users', 'content', 'submissions', 'attendance'].includes(req.query.scope)
-      ? req.query.scope : 'full';
-
-    const payload = buildExportPayload(scope);
-    const json = JSON.stringify(payload, null, 2);
-    const date = new Date().toISOString().slice(0, 10);
-    const filename = `lms-backup-${scope}-${date}.json`;
-
-    logAudit(req.user.id, 'db_export', { scope, filename }, req);
-
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(json);
-  } catch (error) {
-    logger.error('Export error: %s', error.stack);
-    res.status(500).json({ error: 'حدث خطأ أثناء تصدير البيانات' });
-  }
-});
-
-// --- Validate / Dry-Run ---
-app.post('/api/admin/validate-backup', authenticateToken, requireAdmin, express.json({ limit: '50mb' }), (req, res) => {
-  try {
-    const backupData = req.body;
-    const validation = validateBackupSchema(backupData);
-
-    if (!validation.valid) {
-      return res.json({ valid: false, errors: validation.errors, warnings: validation.warnings || [] });
-    }
-
-    // Build dry-run summary: what will change
-    const currentCounts = {
-      users: dbGet('SELECT COUNT(*) as c FROM users').c,
-      lectures: dbGet('SELECT COUNT(*) as c FROM lectures').c,
-      tasks: dbGet('SELECT COUNT(*) as c FROM tasks').c,
-      submissions: dbGet('SELECT COUNT(*) as c FROM submissions').c,
-      ratings: dbGet('SELECT COUNT(*) as c FROM ratings').c,
-      attendance_sessions: dbGet('SELECT COUNT(*) as c FROM attendance_sessions').c,
-      attendance_records: dbGet('SELECT COUNT(*) as c FROM attendance_records').c,
-    };
-
-    const importCounts = {
-      users: backupData.data.users.length,
-      lectures: backupData.data.lectures.length,
-      tasks: backupData.data.tasks.length,
-      submissions: backupData.data.submissions.length,
-      ratings: backupData.data.ratings.length,
-      attendance_sessions: (backupData.data.attendance_sessions || []).length,
-      attendance_records: (backupData.data.attendance_records || []).length,
-    };
-
-    const conflicts = [];
-    // Check for username/email conflicts in imported users
-    const importedIdentifiers = backupData.data.users.map(u => u.username || u.email);
-    const duplicateIdentifiers = importedIdentifiers.filter((e, i) => importedIdentifiers.indexOf(e) !== i);
-    if (duplicateIdentifiers.length > 0) {
-      conflicts.push(`يوجد ${duplicateIdentifiers.length} حساب مكرر في النسخة الاحتياطية`);
-    }
-
-    // Warn if imported data is significantly smaller than current (might be outdated or incomplete)
-    const dataSizeWarnings = validation.warnings || [];
-    for (const table of Object.keys(currentCounts)) {
-      const current = currentCounts[table];
-      const imported = importCounts[table];
-      if (current > 0 && imported < current * 0.5) {
-        dataSizeWarnings.push(`تحذير: جدول "${table}" في النسخة (${imported}) أقل بنسبة كبيرة من الحالي (${current}) — قد تكون النسخة قديمة`);
-      }
-    }
-
-    res.json({
-      valid: true,
-      meta: backupData.meta,
-      currentCounts,
-      importCounts,
-      conflicts,
-      warnings: dataSizeWarnings,
-    });
-  } catch (error) {
-    logger.error('Validate error: %s', error.stack);
-    res.status(500).json({ error: 'حدث خطأ أثناء التحقق من الملف' });
-  }
-});
-
-// --- Import / Restore (JSON) ---
-app.post('/api/admin/import', authenticateToken, requireAdmin, express.json({ limit: '50mb' }), async (req, res) => {
-  try {
-    const backupData = req.body;
-
-    // Validate schema
-    const validation = validateBackupSchema(backupData);
-    if (!validation.valid) {
-      return res.status(400).json({ error: 'ملف النسخة الاحتياطية غير صالح', details: validation.errors });
-    }
-
-    // Activate maintenance mode to block other requests
-    isMaintenanceMode = true;
-    logger.info('[Import] Maintenance mode activated');
-
-    try {
-      // Create pre-import backup using SQLite backup API (no memory overhead)
-      ensureBackupsDir();
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const backupFilename = `pre-import-${timestamp}.db`;
-      const backupPath = path.join(BACKUPS_DIR, backupFilename);
-      await dbBackup(backupPath);
-      logger.info(`[Import] Pre-import backup saved: ${backupFilename}`);
-
-      // Disable foreign keys to prevent cascade deletions (sessions, audit_logs)
-      toggleForeignKeys(false);
-
-      // Perform import inside a transaction (atomic — auto-rollback on error)
-      dbTransaction(() => {
-        // Step 1: Delete data tables (FK-safe order, but FK is OFF so order is just for clarity)
-        dbRun('DELETE FROM attendance_records');
-        dbRun('DELETE FROM attendance_sessions');
-        dbRun('DELETE FROM ratings');
-        dbRun('DELETE FROM submissions');
-        dbRun('DELETE FROM tasks');
-        dbRun('DELETE FROM lectures');
-        dbRun('DELETE FROM users');
-
-        // Step 2: Insert imported data with original IDs (using ?? instead of || for falsy safety)
-        const { users, lectures, tasks, submissions, ratings } = backupData.data;
-        const attSessions = backupData.data.attendance_sessions || [];
-        const attRecords = backupData.data.attendance_records || [];
-        const auditLogs = backupData.data.audit_logs || [];
-
-        for (const u of users) {
-          dbRun(
-            'INSERT INTO users (id, name, username, password, role, points, fill_card_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [u.id, sanitizeBackupString(u.name), sanitizeBackupString(u.username || u.email), u.password, u.role, u.points ?? 0, u.fill_card_count ?? 0, u.created_at ?? new Date().toISOString()]
-          );
-        }
-
-        for (const l of lectures) {
-          dbRun(
-            'INSERT INTO lectures (id, title, description, materialUrl, videoUrl, orderNum, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [l.id, sanitizeBackupString(l.title), sanitizeBackupString(l.description), sanitizeBackupString(l.materialUrl), sanitizeBackupString(l.videoUrl) ?? null, l.orderNum ?? 0, l.created_at ?? new Date().toISOString()]
-          );
-        }
-
-        for (const t of tasks) {
-          dbRun(
-            'INSERT INTO tasks (id, title, description, taskUrl, created_at) VALUES (?, ?, ?, ?, ?)',
-            [t.id, sanitizeBackupString(t.title), sanitizeBackupString(t.description), sanitizeBackupString(t.taskUrl), t.created_at ?? new Date().toISOString()]
-          );
-        }
-
-        for (const s of submissions) {
-          dbRun(
-            'INSERT INTO submissions (id, userId, taskId, fileUrl, uploadedFileId, uploadedFileUrl, uploadedFileName, storageProvider, grade, feedback, feedbackFileId, feedbackFileUrl, feedbackFileName, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [
-              s.id, s.userId, s.taskId, sanitizeBackupString(s.fileUrl),
-              s.uploadedFileId ?? null, s.uploadedFileUrl ?? null, s.uploadedFileName ?? null, s.storageProvider ?? null,
-              s.grade ?? null, sanitizeBackupString(s.feedback),
-              s.feedbackFileId ?? null, s.feedbackFileUrl ?? null, s.feedbackFileName ?? null,
-              s.created_at ?? new Date().toISOString()
-            ]
-          );
-        }
-
-        for (const r of ratings) {
-          dbRun(
-            'INSERT INTO ratings (id, userId, lectureId, rating, comment, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-            [r.id, r.userId, r.lectureId, r.rating, sanitizeBackupString(r.comment), r.created_at ?? new Date().toISOString()]
-          );
-        }
-
-        for (const as of attSessions) {
-          dbRun(
-            'INSERT INTO attendance_sessions (id, title, description, notes, lectureId, attendanceDate, bonusPoints, latePoints, isLocked, createdBy, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [as.id, sanitizeBackupString(as.title), sanitizeBackupString(as.description), sanitizeBackupString(as.notes), as.lectureId, as.attendanceDate, as.bonusPoints ?? 50, as.latePoints ?? 35, as.isLocked ?? 0, as.createdBy, as.created_at ?? new Date().toISOString()]
-          );
-        }
-
-        for (const ar of attRecords) {
-          dbRun(
-            'INSERT INTO attendance_records (id, sessionId, studentId, status, awardedPoints, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [ar.id, ar.sessionId, ar.studentId, ar.status, ar.awardedPoints ?? 0, sanitizeBackupString(ar.notes) ?? null, ar.created_at ?? new Date().toISOString()]
-          );
-        }
-
-        // Restore audit_logs if present in backup
-        if (auditLogs.length > 0) {
-          dbRun('DELETE FROM audit_logs');
-          for (const log of auditLogs) {
-            dbRun(
-              'INSERT INTO audit_logs (id, userId, action, details, ipAddress, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-              [log.id, log.userId, log.action, log.details, log.ipAddress, log.created_at ?? new Date().toISOString()]
-            );
-          }
-        }
-      });
-
-      // Re-enable foreign keys and verify integrity
-      toggleForeignKeys(true);
-
-      const summary = {
-        users: backupData.data.users.length,
-        lectures: backupData.data.lectures.length,
-        tasks: backupData.data.tasks.length,
-        submissions: backupData.data.submissions.length,
-        ratings: backupData.data.ratings.length,
-        attendance_sessions: (backupData.data.attendance_sessions || []).length,
-        attendance_records: (backupData.data.attendance_records || []).length,
-        audit_logs: (backupData.data.audit_logs || []).length,
-      };
-      logger.info('[Import] Import completed successfully: %o', summary);
-      logAudit(req.user.id, 'db_import', { summary, preImportBackup: backupFilename }, req);
-      res.json({
-        message: 'تم استيراد البيانات بنجاح',
-        summary,
-        backupFile: backupFilename,
-      });
-    } catch (importError) {
-      // Transaction auto-rolled back — data is safe
-      logger.error('Import failed (transaction rolled back automatically): %s', importError.stack);
-      // Ensure foreign keys are re-enabled even on error
-      try { toggleForeignKeys(true); } catch (_) { /* ignore */ }
-      res.status(500).json({
-        error: 'فشل الاستيراد — تم التراجع تلقائياً والبيانات لم تتأثر',
-        details: importError.message,
-      });
-    } finally {
-      isMaintenanceMode = false;
-      logger.info('[Import] Maintenance mode deactivated');
-    }
-  } catch (error) {
-    isMaintenanceMode = false;
-    logger.error('Import error: %s', error.stack);
-    res.status(500).json({ error: 'حدث خطأ أثناء استيراد البيانات' });
-  }
-});
+// ==============================
+// JSON Export/Import logic was removed per ponytail-audit
+// The application relies on the faster and more secure SQLite `.db` native backups via /api/admin/import-db
+// ==============================
 
 // --- Import / Restore (.db file) ---
 const dbUpload = multer({

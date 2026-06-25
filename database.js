@@ -6,6 +6,28 @@ const logger = require('./services/logger');
 
 let db = null;
 
+const dbProxy = new Proxy({}, {
+  get(target, prop) {
+    if (prop === 'name') {
+      return db ? db.name : null;
+    }
+    if (!db) {
+      throw new Error('Database is not initialized. Call setupDB() first.');
+    }
+    const val = Reflect.get(db, prop);
+    if (typeof val === 'function') {
+      return val.bind(db);
+    }
+    return val;
+  },
+  set(target, prop, value) {
+    if (!db) {
+      throw new Error('Database is not initialized.');
+    }
+    return Reflect.set(db, prop, value);
+  }
+});
+
 async function setupDB() {
   const dbPath = process.env.DB_PATH || path.join(__dirname, 'database.sqlite');
   
@@ -55,6 +77,9 @@ async function setupDB() {
       storageProvider TEXT,
       grade INTEGER,
       feedback TEXT,
+      feedbackFileId TEXT,
+      feedbackFileUrl TEXT,
+      feedbackFileName TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(userId) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY(taskId) REFERENCES tasks(id) ON DELETE CASCADE
@@ -94,6 +119,7 @@ async function setupDB() {
       studentId INTEGER NOT NULL,
       status TEXT NOT NULL DEFAULT 'absent' CHECK(status IN ('present', 'absent', 'late')),
       awardedPoints INTEGER DEFAULT 0,
+      notes TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(sessionId) REFERENCES attendance_sessions(id) ON DELETE CASCADE,
       FOREIGN KEY(studentId) REFERENCES users(id) ON DELETE CASCADE,
@@ -121,70 +147,6 @@ async function setupDB() {
       FOREIGN KEY(userId) REFERENCES users(id) ON DELETE SET NULL
     );
   `);
-
-  // Migrate existing database to add notes if it doesn't exist
-  try {
-    db.exec('ALTER TABLE attendance_records ADD COLUMN notes TEXT');
-    console.log('✅ Added notes column to attendance_records');
-  } catch (err) {
-    // Column already exists or table doesn't exist yet
-  }
-
-  // Migrate existing database to add latePoints if it doesn't exist
-  try {
-    db.exec('ALTER TABLE attendance_sessions ADD COLUMN latePoints INTEGER DEFAULT 35');
-    console.log('✅ Added latePoints column to attendance_sessions');
-  } catch (err) {
-    // Column already exists or table doesn't exist yet
-  }
-
-  // Migrate existing database to add videoUrl if it doesn't exist
-  try {
-    db.exec('ALTER TABLE lectures ADD COLUMN videoUrl TEXT');
-    console.log('✅ Added videoUrl column to lectures');
-  } catch (err) {
-    // Column already exists or table doesn't exist yet
-  }
-
-  // Migrate existing database to add fill_card_count if it doesn't exist
-  try {
-    db.exec('ALTER TABLE users ADD COLUMN fill_card_count INTEGER DEFAULT 0');
-    console.log('✅ Added fill_card_count column to users');
-  } catch (err) {
-    // Column already exists or table doesn't exist yet
-  }
-
-  // Migrate existing database to add new submissions columns if they do not exist
-  try {
-    db.exec('ALTER TABLE submissions ADD COLUMN uploadedFileId TEXT');
-    console.log('✅ Added uploadedFileId column to submissions');
-  } catch (err) {}
-  try {
-    db.exec('ALTER TABLE submissions ADD COLUMN uploadedFileUrl TEXT');
-    console.log('✅ Added uploadedFileUrl column to submissions');
-  } catch (err) {}
-  try {
-    db.exec('ALTER TABLE submissions ADD COLUMN uploadedFileName TEXT');
-    console.log('✅ Added uploadedFileName column to submissions');
-  } catch (err) {}
-  try {
-    db.exec('ALTER TABLE submissions ADD COLUMN storageProvider TEXT');
-    console.log('✅ Added storageProvider column to submissions');
-  } catch (err) {}
-
-  // Migrate existing database to add new feedbackFile columns if they do not exist
-  try {
-    db.exec('ALTER TABLE submissions ADD COLUMN feedbackFileId TEXT');
-    console.log('✅ Added feedbackFileId column to submissions');
-  } catch (err) {}
-  try {
-    db.exec('ALTER TABLE submissions ADD COLUMN feedbackFileUrl TEXT');
-    console.log('✅ Added feedbackFileUrl column to submissions');
-  } catch (err) {}
-  try {
-    db.exec('ALTER TABLE submissions ADD COLUMN feedbackFileName TEXT');
-    console.log('✅ Added feedbackFileName column to submissions');
-  } catch (err) {}
 
   // Default Users
   const count = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
@@ -243,31 +205,11 @@ async function setupDB() {
   return db;
 }
 
-// Helpers
-function dbGet(sql, params = []) {
-  const stmt = db.prepare(sql);
-  return stmt.get(...params);
-}
-
-function dbAll(sql, params = []) {
-  const stmt = db.prepare(sql);
-  return stmt.all(...params);
-}
-
-function dbRun(sql, params = []) {
-  const stmt = db.prepare(sql);
-  const info = stmt.run(...params);
-  return {
-    lastInsertRowid: info.lastInsertRowid,
-    changes: info.changes
-  };
-}
-
 function logAudit(userId, action, details = null, req = null) {
   try {
     const ip = req ? (req.headers['x-forwarded-for'] || req.socket.remoteAddress) : null;
     const detailsStr = details ? (typeof details === 'object' ? JSON.stringify(details) : String(details)) : null;
-    dbRun('INSERT INTO audit_logs (userId, action, details, ipAddress) VALUES (?, ?, ?, ?)', [userId, action, detailsStr, ip]);
+    db.prepare('INSERT INTO audit_logs (userId, action, details, ipAddress) VALUES (?, ?, ?, ?)').run(userId, action, detailsStr, ip);
     logger.info(`[Audit Log] User ID: ${userId || 'SYSTEM'} | Action: ${action} | Details: ${detailsStr || 'None'} | IP: ${ip || 'Unknown'}`);
   } catch (err) {
     logger.error(`[Audit Log Failure] Failed to record audit log for action ${action}: ${err.message}`);
@@ -322,4 +264,5 @@ async function replaceDatabaseFile(newDbPath) {
   logger.info(`[DB Replace] Database file replaced successfully from: ${path.basename(newDbPath)}`);
 }
 
-module.exports = { setupDB, dbGet, dbAll, dbRun, logAudit, dbBackup, dbTransaction, toggleForeignKeys, replaceDatabaseFile };
+module.exports = { setupDB, logAudit, dbBackup, dbTransaction, toggleForeignKeys, replaceDatabaseFile };
+Object.defineProperty(module.exports, 'db', { get: () => dbProxy });
