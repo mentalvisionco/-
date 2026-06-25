@@ -164,6 +164,23 @@
   border-color: var(--accent);
   box-shadow: var(--shadow-glow-accent);
 }
+.outline {
+  background: transparent;
+  color: var(--text-primary);
+  border-top-color: var(--glass-border-top);
+  border-left-color: var(--glass-border-side);
+  border-right-color: var(--glass-border-side);
+  border-bottom-color: var(--glass-border-bottom);
+}
+.outline:hover:not(:disabled) {
+  background: var(--surface-glass-control);
+  color: var(--text-primary);
+  border-top-color: rgba(255, 255, 255, 0.28);
+  border-left-color: rgba(255, 255, 255, 0.16);
+  border-right-color: rgba(255, 255, 255, 0.16);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  box-shadow: var(--shadow-glass-sm);
+}
 
 /* ——— Modifiers ——— */
 .fullWidth { width: 100%; }

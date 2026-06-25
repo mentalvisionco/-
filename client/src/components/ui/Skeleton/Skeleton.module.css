@@ -7,6 +7,7 @@
   );
   background-size: 400% 100%;
   animation: shimmer 2.4s ease-in-out infinite;
+  will-change: background-position;
   border-radius: var(--radius-md);
 }
 

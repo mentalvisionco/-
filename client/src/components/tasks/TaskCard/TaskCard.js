@@ -17,42 +17,43 @@ const getGradeDetails = (grade) => {
   if (g >= 40 && g <= 50) {
     return {
       text: 'تحفة فنية 😎👍',
-      gradient: 'linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(5, 150, 105, 0.03) 100%)',
-      borderColor: 'rgba(16, 185, 129, 0.3)',
-      color: '#10b981',
+      gradient: 'linear-gradient(135deg, var(--green-muted) 0%, rgba(92, 214, 69, 0.03) 100%)',
+      borderColor: 'rgba(92, 214, 69, 0.3)',
+      color: 'var(--green)',
     };
   }
   if (g >= 30 && g < 40) {
     return {
       text: 'الفنان الصغير',
-      gradient: 'linear-gradient(135deg, rgba(132, 204, 22, 0.12) 0%, rgba(101, 163, 13, 0.03) 100%)',
-      borderColor: 'rgba(132, 204, 22, 0.3)',
-      color: '#84cc16',
+      gradient: 'linear-gradient(135deg, var(--green-muted) 0%, rgba(92, 214, 69, 0.01) 100%)',
+      borderColor: 'rgba(92, 214, 69, 0.2)',
+      color: 'var(--green)',
     };
   }
   if (g >= 20 && g < 30) {
     return {
       text: 'حلو يجي منك 🤝',
-      gradient: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(217, 119, 6, 0.03) 100%)',
+      gradient: 'linear-gradient(135deg, var(--amber-muted) 0%, rgba(245, 158, 11, 0.03) 100%)',
       borderColor: 'rgba(245, 158, 11, 0.3)',
-      color: '#f59e0b',
+      color: 'var(--amber)',
     };
   }
   if (g >= 10 && g < 20) {
     return {
       text: 'شغال مش وحش 👏',
-      gradient: 'linear-gradient(135deg, rgba(248, 113, 113, 0.12) 0%, rgba(220, 38, 38, 0.03) 100%)',
-      borderColor: 'rgba(248, 113, 113, 0.3)',
-      color: '#f87171',
+      gradient: 'linear-gradient(135deg, var(--red-muted) 0%, rgba(239, 68, 68, 0.03) 100%)',
+      borderColor: 'rgba(239, 68, 68, 0.2)',
+      color: 'var(--red)',
     };
   }
   return {
     text: 'ارجح انك تشوف المحاضرة تاني 🙃',
-    gradient: 'linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(185, 28, 28, 0.03) 100%)',
-    borderColor: 'rgba(239, 68, 68, 0.3)',
-    color: '#ef4444',
+    gradient: 'linear-gradient(135deg, var(--red-muted) 0%, rgba(239, 68, 68, 0.05) 100%)',
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    color: 'var(--red)',
   };
 };
+
 
 export default function TaskCard({ task, submission, onSubmit, onCancel }) {
   const isCompleted = !!submission;

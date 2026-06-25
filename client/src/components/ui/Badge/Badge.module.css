@@ -14,19 +14,20 @@
   transition: all var(--duration-normal) var(--ease-out);
   border: 1px solid transparent;
 }
-
-.dot::before {
-  content: '';
-  width: 5px; height: 5px;
+.dot {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: currentColor;
   flex-shrink: 0;
+  display: inline-block;
   animation: dotPulse 2s ease-in-out infinite;
+  will-change: transform;
 }
 
 @keyframes dotPulse {
   0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.5); opacity: 0.6; }
+  50% { transform: scale(1.4); opacity: 0.5; }
 }
 
 /* ——— Variants ——— */

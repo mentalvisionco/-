@@ -3,8 +3,21 @@ import styles from './LectureCard.module.css';
 import { IconStarFilled } from '@/components/icons';
 
 export default function LectureCard({ lecture, onClick }) {
+  const handleKeyDown = (e) => {
+    if (onClick && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      onClick(lecture.id);
+    }
+  };
+
   return (
-    <div className={styles.card} onClick={() => onClick(lecture.id)} role="button" tabIndex={0}>
+    <div
+      className={styles.card}
+      onClick={() => onClick(lecture.id)}
+      onKeyDown={handleKeyDown}
+      role="button"
+      tabIndex={0}
+    >
       <div className={styles.content}>
         <div className={styles.orderBadge}>{lecture.orderNum || '—'}</div>
         <div className={styles.info}>

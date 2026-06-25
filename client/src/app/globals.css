@@ -449,12 +449,6 @@ small { font-size: var(--font-sm); color: var(--text-tertiary); }
   50% { transform: translateY(-6px); }
 }
 
-/* ——— Float animation ——— */
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
-}
-
 /* ——— Shimmer effect for glass panels ——— */
 @keyframes shimmerGlass {
   0% { transform: translateX(-100%) skewX(-15deg); }
@@ -531,5 +525,15 @@ small { font-size: var(--font-sm); color: var(--text-tertiary); }
   }
   100% {
     transform: translate(0, 0) scale(1);
+  }
+}
+
+/* ——— Reduced Motion Support (WCAG 2.1) ——— */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

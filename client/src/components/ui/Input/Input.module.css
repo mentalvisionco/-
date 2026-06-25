@@ -79,3 +79,34 @@
 .inputWrapper:focus-within .iconSlot { color: var(--accent); }
 
 .error { font-size: var(--font-xs); color: var(--red); margin-top: var(--space-1); }
+
+/* ——— Password Toggle ——— */
+.hasPasswordToggle .input {
+  padding-left: var(--space-10);
+}
+
+.passwordToggle {
+  position: absolute;
+  left: var(--space-4);
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-disabled);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: color var(--duration-normal);
+  z-index: 5;
+}
+
+.passwordToggle:hover {
+  color: var(--text-secondary);
+}
+
+.activeEye {
+  color: var(--accent);
+}
+
