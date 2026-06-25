@@ -896,6 +896,195 @@ app.put('/api/admin/submissions/:id/grade', authenticateToken, requireAdmin, (re
   });
 });
 
+app.get('/api/admin/dashboard/summary', authenticateToken, requireViewerOrAdmin, (req, res) => {
+  try {
+    const studentsRaw = db.prepare(`
+      SELECT id, name, username, points, fill_card_count 
+      FROM users 
+      WHERE role = 'student' 
+      ORDER BY name ASC
+    `).all();
+
+    const sessions = db.prepare(`
+      SELECT id, title, attendanceDate 
+      FROM attendance_sessions 
+      ORDER BY attendanceDate ASC, id ASC
+    `).all();
+
+    const attendanceRecords = db.prepare(`
+      SELECT sessionId, studentId, status, awardedPoints 
+      FROM attendance_records
+    `).all();
+
+    const tasks = db.prepare(`
+      SELECT id, title 
+      FROM tasks 
+      ORDER BY created_at ASC, id ASC
+    `).all();
+
+    const submissions = db.prepare(`
+      SELECT id, userId, taskId, grade 
+      FROM submissions
+    `).all();
+
+    const attendanceMap = {};
+    attendanceRecords.forEach(rec => {
+      if (!attendanceMap[rec.studentId]) attendanceMap[rec.studentId] = {};
+      let statusInt = 3; // 3: no record
+      if (rec.status === 'absent') statusInt = 0;
+      else if (rec.status === 'present') statusInt = 1;
+      else if (rec.status === 'late') statusInt = 2;
+      attendanceMap[rec.studentId][rec.sessionId] = statusInt;
+    });
+
+    const submissionMap = {};
+    submissions.forEach(sub => {
+      if (!submissionMap[sub.userId]) submissionMap[sub.userId] = {};
+      let statusInt = 2; // 2: pending grade if submitted but grade is null
+      if (sub.grade !== null && sub.grade !== undefined) statusInt = 1; // 1: graded
+      submissionMap[sub.userId][sub.taskId] = {
+        status: statusInt,
+        grade: sub.grade
+      };
+    });
+
+    const totalSessions = sessions.length;
+    const totalTasks = tasks.length;
+
+    let globalAttendanceSum = 0;
+    let globalSubmissionSum = 0;
+    let globalGradesSum = 0;
+    let globalGradesCount = 0;
+    
+    let totalAbsences = 0;
+    let totalMissingTasks = 0;
+    let totalPendingGrades = 0;
+
+    const students = studentsRaw.map(student => {
+      const sAttendance = attendanceMap[student.id] || {};
+      const sSubmissions = submissionMap[student.id] || {};
+
+      const attendance = {};
+      let presentCount = 0;
+      let lateCount = 0;
+      let absentCount = 0;
+
+      sessions.forEach(sess => {
+        const status = sAttendance[sess.id] !== undefined ? sAttendance[sess.id] : 3;
+        attendance[sess.id] = status;
+        if (status === 1) presentCount++;
+        else if (status === 2) lateCount++;
+        else if (status === 0) {
+          absentCount++;
+          totalAbsences++;
+        }
+      });
+
+      const attendedCount = presentCount + lateCount;
+      const attendanceRate = totalSessions > 0 ? Math.round((attendedCount / totalSessions) * 100) : 100;
+      globalAttendanceSum += attendanceRate;
+
+      const studentTasks = {};
+      let submittedCount = 0;
+      let gradedCount = 0;
+      let studentGradesSum = 0;
+      let studentPendingCount = 0;
+
+      tasks.forEach(task => {
+        const sub = sSubmissions[task.id];
+        if (sub) {
+          studentTasks[task.id] = { status: sub.status, grade: sub.grade };
+          submittedCount++;
+          if (sub.status === 1) {
+            gradedCount++;
+            studentGradesSum += sub.grade;
+            globalGradesSum += sub.grade;
+            globalGradesCount++;
+          } else {
+            studentPendingCount++;
+            totalPendingGrades++;
+          }
+        } else {
+          studentTasks[task.id] = { status: 3, grade: null }; // 3 is missing
+          totalMissingTasks++;
+        }
+      });
+
+      const submissionRate = totalTasks > 0 ? Math.round((submittedCount / totalTasks) * 100) : 100;
+      globalSubmissionSum += submissionRate;
+
+      const averageGrade = gradedCount > 0 ? Math.round((studentGradesSum / gradedCount) * 10) / 10 : null;
+
+      // Predictable Performance Filter rules
+      let performanceStatus = 'active';
+      const missingCount = totalTasks - submittedCount;
+      
+      if (attendanceRate >= 85 && submissionRate >= 85 && (averageGrade === null || averageGrade >= 8.5)) {
+        performanceStatus = 'excelled';
+      } else if (attendanceRate < 70 || submissionRate < 70) {
+        performanceStatus = 'struggling';
+      } else if (studentPendingCount > 0) {
+        performanceStatus = 'pending_grade';
+      } else if (missingCount > 0) {
+        performanceStatus = 'missing_tasks';
+      }
+
+      return {
+        id: student.id,
+        name: student.name,
+        username: student.username,
+        points: student.points || 0,
+        fill_card_count: student.fill_card_count || 0,
+        attendanceRate,
+        submissionRate,
+        averageGrade,
+        attendance,
+        tasks: studentTasks,
+        performanceStatus,
+        presentCount,
+        lateCount,
+        absentCount,
+        submittedCount,
+        missingCount,
+        studentPendingCount
+      };
+    });
+
+    const sortedByPoints = [...students].sort((a, b) => b.points - a.points);
+    const topStudent = sortedByPoints.length > 0 ? { name: sortedByPoints[0].name, points: sortedByPoints[0].points } : null;
+    const lowestStudent = sortedByPoints.length > 0 ? { name: sortedByPoints[sortedByPoints.length - 1].name, points: sortedByPoints[sortedByPoints.length - 1].points } : null;
+
+    const totalStudents = students.length;
+    const avgAttendance = totalStudents > 0 ? Math.round(globalAttendanceSum / totalStudents) : 0;
+    const avgSubmission = totalStudents > 0 ? Math.round(globalSubmissionSum / totalStudents) : 0;
+    const avgGrade = globalGradesCount > 0 ? Math.round((globalGradesSum / globalGradesCount) * 10) / 10 : 0;
+
+    const strugglingCount = students.filter(s => s.performanceStatus === 'struggling').length;
+
+    res.json({
+      students,
+      sessions,
+      tasks,
+      summary: {
+        totalStudents,
+        avgAttendance,
+        avgSubmission,
+        avgGrade,
+        strugglingCount,
+        totalAbsences,
+        totalMissingTasks,
+        totalPendingGrades,
+        topStudent,
+        lowestStudent
+      }
+    });
+  } catch (error) {
+    logger.error('Admin dashboard summary error: %s', error.stack);
+    res.status(500).json({ error: 'حدث خطأ في جلب ملخص لوحة التحكم' });
+  }
+});
+
+
 app.get('/api/admin/students', authenticateToken, requireViewerOrAdmin, (req, res) => {
   try {
     const students = db.prepare(`

@@ -24,6 +24,7 @@ import { SkeletonCard, SkeletonList, SkeletonTable } from '@/components/ui/Skele
 import { IconDashboard, IconStudents, IconLectures, IconTasksAlt, IconPlus, IconEdit, IconTrash, IconSearch, IconExternalLink, IconStarFilled, IconEye, IconBarChart, IconFileText, IconSettings, IconClipboardCheck, IconUpload, IconFilter } from '@/components/icons';
 import Image from 'next/image';
 import styles from './page.module.css';
+import StudentSummary from '@/components/students/StudentSummary/StudentSummary';
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'نظرة عامة', icon: IconDashboard },
@@ -281,50 +282,7 @@ export default function AdminDashboard() {
       {currentView === 'dashboard' && (
         <div className={styles.view} key="dashboard">
           <Header title="لوحة الإدارة" subtitle="متابعة أداء الطلاب والتقييمات" />
-          {loading ? (
-            <><div className={styles.statsGrid}><SkeletonCard /><SkeletonCard /><SkeletonCard /></div><SkeletonList count={4} /></>
-          ) : (
-            <>
-              <div className={styles.statsGrid}>
-                <StatCard label="الطلاب" value={students.length} icon={IconStudents} />
-                <StatCard label="التسليمات" value={submissions.length} icon={IconFileText} />
-                <StatCard label="التفاعل" value={`${avgEng}%`} icon={IconBarChart} />
-              </div>
-
-              <h3 className={styles.sectionTitle}>أحدث التسليمات</h3>
-              <div className={styles.listGap}>
-                {submissions.length === 0 ? (
-                  <EmptyState icon={IconFileText} title="لا توجد تسليمات" description="لم يقم أي طالب بالتسليم بعد." />
-                ) : (
-                  submissions.slice(0, 5).map(sub => (
-                    <Card key={sub.id} padding="sm" className={styles.subItem}>
-                      <div className={styles.subInfo}>
-                        <strong>{sub.studentName}</strong>
-                        <span className={styles.subTask}>{sub.taskTitle}</span>
-                        {sub.uploadedFileName && (
-                          <span className={styles.subFileText}>
-                            الملف: {sub.uploadedFileName}
-                          </span>
-                        )}
-                      </div>
-                      <div className={styles.latestSubActions}>
-                        {sub.fileUrl && sub.fileUrl.startsWith('http') && (
-                          <a href={sub.fileUrl} target="_blank" rel="noopener noreferrer" className={styles.subLink} title="عرض الرابط الخارجي">
-                            <IconExternalLink size={14} /> رابط
-                          </a>
-                        )}
-                        {sub.uploadedFileUrl && (
-                          <a href={sub.uploadedFileUrl} target="_blank" rel="noopener noreferrer" className={`${styles.subLink} ${styles.latestSubLinkFile}`} title="عرض الملف المرفوع">
-                            <IconExternalLink size={14} /> ملف
-                          </a>
-                        )}
-                      </div>
-                    </Card>
-                  ))
-                )}
-              </div>
-            </>
-          )}
+          <StudentSummary />
         </div>
       )}
 
