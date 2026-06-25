@@ -29,7 +29,13 @@ const dbProxy = new Proxy({}, {
 });
 
 async function setupDB() {
-  const dbPath = process.env.DB_PATH || path.join(__dirname, 'database.sqlite');
+  const dbPath = process.env.DB_PATH || path.join(__dirname, 'data', 'database.sqlite');
+  
+  // Ensure the parent directory exists
+  const dbDir = path.dirname(dbPath);
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
   
   db = new Database(dbPath, { verbose: null });
   db.pragma('journal_mode = WAL');
@@ -187,21 +193,6 @@ async function setupDB() {
     console.log('✅ Default lectures created');
   }
 
-  // Fix and compact lecture orderNum values (remove gaps)
-  try {
-    const lecturesList = db.prepare('SELECT id FROM lectures ORDER BY orderNum ASC, id ASC').all();
-    const updateStmt = db.prepare('UPDATE lectures SET orderNum = ? WHERE id = ?');
-    const transaction = db.transaction(() => {
-      lecturesList.forEach((lec, idx) => {
-        updateStmt.run(idx + 1, lec.id);
-      });
-    });
-    transaction();
-    console.log('✅ Compacted lecture orderNum sequences successfully');
-  } catch (err) {
-    console.error('Failed to compact lecture orderNum sequence:', err.message);
-  }
-
   return db;
 }
 
@@ -231,14 +222,6 @@ function dbTransaction(callback) {
   return transaction();
 }
 
-/**
- * Enable or disable foreign key constraints.
- * Must be called OUTSIDE of a transaction to take effect in SQLite.
- */
-function toggleForeignKeys(enable) {
-  if (!db) throw new Error('Database is not initialized');
-  db.pragma(`foreign_keys = ${enable ? 'ON' : 'OFF'}`);
-}
 
 /**
  * Replace the current database file with a new one (for .db restore).
@@ -264,5 +247,5 @@ async function replaceDatabaseFile(newDbPath) {
   logger.info(`[DB Replace] Database file replaced successfully from: ${path.basename(newDbPath)}`);
 }
 
-module.exports = { setupDB, logAudit, dbBackup, dbTransaction, toggleForeignKeys, replaceDatabaseFile };
+module.exports = { setupDB, logAudit, dbBackup, dbTransaction, replaceDatabaseFile };
 Object.defineProperty(module.exports, 'db', { get: () => dbProxy });

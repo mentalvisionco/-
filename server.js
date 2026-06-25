@@ -54,7 +54,6 @@ const {
   logAudit,
   dbBackup,
   dbTransaction,
-  toggleForeignKeys,
   replaceDatabaseFile,
   db: db
 } = require('./database');
@@ -1600,11 +1599,7 @@ function ensureBackupsDir() {
   }
 }
 
-function sanitizeBackupString(val) {
-  if (val === null || val === undefined) return val;
-  if (typeof val !== 'string') return val;
-  return val.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').trim();
-}
+
 
 // ==============================
 // JSON Export/Import logic was removed per ponytail-audit
