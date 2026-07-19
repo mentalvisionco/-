@@ -442,3 +442,187 @@
   margin-top: 2px;
 }
 
+/* ——— Submissions Filter Toolbar & Accordions ——— */
+.subFilterToolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface-glass-base);
+  backdrop-filter: blur(var(--glass-blur-base));
+  -webkit-backdrop-filter: blur(var(--glass-blur-base));
+  border-top: 1px solid var(--glass-border-top);
+  border-left: 1px solid var(--glass-border-side);
+  border-right: 1px solid var(--glass-border-side);
+  border-bottom: 1px solid var(--glass-border-bottom);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-glass-sm);
+}
+
+.subFilterRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.subGroupBtnWrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-right: auto;
+}
+
+.groupLabel {
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  font-weight: var(--weight-medium);
+}
+
+.groupBtn {
+  padding: var(--space-1-5) var(--space-3);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  background: var(--surface-glass-control);
+  border: 1px solid var(--glass-border-side);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.groupBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.activeGroupBtn {
+  background: rgba(92, 214, 69, 0.15) !important;
+  color: var(--accent) !important;
+  border-color: rgba(92, 214, 69, 0.3) !important;
+  font-weight: var(--weight-semibold);
+}
+
+.subTabsContainer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-top: 1px solid var(--glass-border-bottom);
+  padding-top: var(--space-3);
+}
+
+.subTab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-tertiary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.subTab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.activeSubTab {
+  color: var(--accent) !important;
+  background: rgba(92, 214, 69, 0.1) !important;
+  border-color: rgba(92, 214, 69, 0.2) !important;
+  font-weight: var(--weight-semibold);
+}
+
+/* Accordion Grouping */
+.groupAccordionList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.groupCard {
+  background: var(--surface-glass-base);
+  backdrop-filter: blur(var(--glass-blur-base));
+  -webkit-backdrop-filter: blur(var(--glass-blur-base));
+  border-top: 1px solid var(--glass-border-top);
+  border-left: 1px solid var(--glass-border-side);
+  border-right: 1px solid var(--glass-border-side);
+  border-bottom: 1px solid var(--glass-border-bottom);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-glass-sm);
+  transition: border-color var(--duration-normal) var(--ease-out);
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-6);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--duration-fast);
+}
+
+.groupHeader:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.groupTitleWrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.groupTitle {
+  font-size: var(--font-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.groupSubCount {
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.groupToggleBtn {
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--duration-fast);
+}
+
+.groupContent {
+  padding: var(--space-4) var(--space-6) var(--space-6) var(--space-6);
+  border-top: 1px solid var(--glass-border-bottom);
+  background: rgba(0, 0, 0, 0.1);
+  animation: groupSlideDown var(--duration-normal) var(--ease-out) both;
+}
+
+@keyframes groupSlideDown {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 768px) {
+  .subFilterRow { flex-direction: column; align-items: stretch; }
+  .subGroupBtnWrap { margin-right: 0; justify-content: space-between; width: 100%; }
+  .subTabsContainer { overflow-x: auto; width: 100%; padding-bottom: var(--space-2); }
+  .groupHeader { padding: var(--space-4) var(--space-4); }
+  .groupContent { padding: var(--space-4) var(--space-4); }
+}
+
+

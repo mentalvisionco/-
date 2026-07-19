@@ -21,7 +21,7 @@ import BackupPanel from '@/components/backup/BackupPanel/BackupPanel';
 import AttendancePanel from '@/components/attendance/AttendancePanel/AttendancePanel';
 import SubmissionItem from '@/components/tasks/SubmissionItem/SubmissionItem';
 import { SkeletonCard, SkeletonList, SkeletonTable } from '@/components/ui/Skeleton/Skeleton';
-import { IconDashboard, IconStudents, IconLectures, IconTasksAlt, IconPlus, IconEdit, IconTrash, IconSearch, IconExternalLink, IconStarFilled, IconEye, IconBarChart, IconFileText, IconSettings, IconClipboardCheck, IconUpload, IconFilter } from '@/components/icons';
+import { IconDashboard, IconStudents, IconLectures, IconTasksAlt, IconPlus, IconEdit, IconTrash, IconSearch, IconExternalLink, IconStarFilled, IconEye, IconBarChart, IconFileText, IconSettings, IconClipboardCheck, IconUpload, IconFilter, IconChevronDown, IconChevronUp, IconDownload, IconCheckCircle, IconClock } from '@/components/icons';
 import Image from 'next/image';
 import styles from './page.module.css';
 import StudentSummary from '@/components/students/StudentSummary/StudentSummary';
@@ -76,6 +76,47 @@ export default function AdminDashboard() {
 
   // Confirm dialog
   const [confirmState, setConfirmState] = useState({ open: false, title: '', message: '', onConfirm: null });
+
+  // Submissions filter & grouping state
+  const [subSearch, setSubSearch] = useState('');
+  const [subTaskFilter, setSubTaskFilter] = useState('all');
+  const [subStatusFilter, setSubStatusFilter] = useState('all');
+  const [subGroupBy, setSubGroupBy] = useState('list');
+  const [expandedGroups, setExpandedGroups] = useState({});
+
+  // Load submissions preferences from localStorage
+  useEffect(() => {
+    try {
+      const savedTask = localStorage.getItem('lms_sub_task');
+      const savedStatus = localStorage.getItem('lms_sub_status');
+      const savedGroupBy = localStorage.getItem('lms_sub_groupby');
+      if (savedTask) setSubTaskFilter(savedTask);
+      if (savedStatus) setSubStatusFilter(savedStatus);
+      if (savedGroupBy) setSubGroupBy(savedGroupBy);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const handleTaskFilterChange = (val) => {
+    setSubTaskFilter(val);
+    try { localStorage.setItem('lms_sub_task', val); } catch {}
+  };
+  const handleStatusFilterChange = (val) => {
+    setSubStatusFilter(val);
+    try { localStorage.setItem('lms_sub_status', val); } catch {}
+  };
+  const handleGroupByChange = (val) => {
+    setSubGroupBy(val);
+    try { localStorage.setItem('lms_sub_groupby', val); } catch {}
+  };
+
+  const toggleGroup = (groupId) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupId]: prev[groupId] === undefined ? false : !prev[groupId]
+    }));
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -265,6 +306,106 @@ export default function AdminDashboard() {
 
     return result;
   }, [students, searchQuery, sortBy]);
+
+  // Filtered submissions logic
+  const filteredSubmissions = useMemo(() => {
+    let result = [...submissions];
+
+    if (subSearch.trim()) {
+      const q = subSearch.toLowerCase().trim();
+      result = result.filter(s =>
+        (s.studentName && s.studentName.toLowerCase().includes(q)) ||
+        (s.taskTitle && s.taskTitle.toLowerCase().includes(q))
+      );
+    }
+
+    if (subTaskFilter !== 'all') {
+      result = result.filter(s => String(s.taskId) === String(subTaskFilter));
+    }
+
+    if (subStatusFilter === 'pending') {
+      result = result.filter(s => s.grade === null || s.grade === undefined);
+    } else if (subStatusFilter === 'graded') {
+      result = result.filter(s => s.grade !== null && s.grade !== undefined);
+    }
+
+    return result;
+  }, [submissions, subSearch, subTaskFilter, subStatusFilter]);
+
+  // Submissions statistics
+  const subStats = useMemo(() => {
+    const total = submissions.length;
+    const pending = submissions.filter(s => s.grade === null || s.grade === undefined).length;
+    const graded = total - pending;
+    return { total, pending, graded };
+  }, [submissions]);
+
+  // Grouping logic (by task or by student)
+  const groupedSubmissions = useMemo(() => {
+    if (subGroupBy === 'task') {
+      const groupsMap = {};
+      filteredSubmissions.forEach(sub => {
+        const key = sub.taskId || 'unknown';
+        if (!groupsMap[key]) {
+          groupsMap[key] = {
+            id: `task-${key}`,
+            title: sub.taskTitle || 'تاسك غير معروف',
+            submissions: []
+          };
+        }
+        groupsMap[key].submissions.push(sub);
+      });
+      return Object.values(groupsMap);
+    }
+
+    if (subGroupBy === 'student') {
+      const groupsMap = {};
+      filteredSubmissions.forEach(sub => {
+        const key = sub.userId || 'unknown';
+        if (!groupsMap[key]) {
+          groupsMap[key] = {
+            id: `student-${key}`,
+            title: sub.studentName || 'طالب غير معروف',
+            submissions: []
+          };
+        }
+        groupsMap[key].submissions.push(sub);
+      });
+      return Object.values(groupsMap);
+    }
+
+    return [];
+  }, [filteredSubmissions, subGroupBy]);
+
+  // CSV Export Handler
+  const handleExportCSV = () => {
+    if (!filteredSubmissions || filteredSubmissions.length === 0) {
+      toast.error('لا توجد تسليمات لتصديرها');
+      return;
+    }
+
+    const headers = ['رقم التسليم', 'اسم الطالب', 'عنوان التاسك', 'الحالة', 'الدرجة', 'الملاحظات', 'رابط التسليم'];
+    const rows = filteredSubmissions.map(sub => [
+      sub.id,
+      `"${(sub.studentName || '').replace(/"/g, '""')}"`,
+      `"${(sub.taskTitle || '').replace(/"/g, '""')}"`,
+      sub.grade !== null && sub.grade !== undefined ? 'تم التقييم' : 'بانتظار التقييم',
+      sub.grade !== null && sub.grade !== undefined ? `${sub.grade}/50` : '-',
+      `"${(sub.feedback || '').replace(/"/g, '""')}"`,
+      `"${sub.uploadedFileUrl || sub.fileUrl || ''}"`
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `تسليمات_الطلاب_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('تم تصدير ملف التسليمات بنجاح');
+  };
 
   if (!ready || !user) return null;
 
@@ -488,18 +629,164 @@ export default function AdminDashboard() {
       {/* ═══ Submissions View ═══ */}
       {currentView === 'submissions' && (
         <div className={styles.view} key="submissions">
-          <Header title="إدارة التسليمات" subtitle={`${submissions.length} تسليم`} />
-          
-          {loading ? <SkeletonList count={3} /> : (
-            <div className={styles.listGap}>
-              {submissions.length === 0 ? (
-                <EmptyState icon={IconFileText} title="لا توجد تسليمات" description="لم يقم أي طالب بالتسليم بعد." />
-              ) : (
-                submissions.map(sub => (
-                  <SubmissionItem key={sub.id} sub={sub} onGrade={handleGradeSubmission} />
-                ))
-              )}
+          <Header title="إدارة التسليمات" subtitle={`${filteredSubmissions.length} تسليم من أصل ${submissions.length}`}>
+            <Button variant="secondary" size="md" icon={IconDownload} onClick={handleExportCSV}>
+              تصدير CSV
+            </Button>
+          </Header>
+
+          {/* Submissions Filter Toolbar */}
+          <div className={styles.subFilterToolbar}>
+            <div className={styles.subFilterRow}>
+              {/* Search */}
+              <div className={styles.searchWrap}>
+                <Input
+                  icon={IconSearch}
+                  placeholder="بحث باسم الطالب أو التاسك..."
+                  value={subSearch}
+                  onChange={e => setSubSearch(e.target.value)}
+                  size="sm"
+                />
+              </div>
+
+              {/* Task Dropdown Filter */}
+              <div className={styles.filterWrap}>
+                <IconFilter className={styles.filterIcon} size={14} />
+                <select
+                  className={styles.sortSelect}
+                  value={subTaskFilter}
+                  onChange={e => handleTaskFilterChange(e.target.value)}
+                  aria-label="تصفية حسب التاسك"
+                >
+                  <option value="all">جميع التاسكات ({tasks.length})</option>
+                  {tasks.map(t => (
+                    <option key={t.id} value={t.id}>{t.title}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Group By Options */}
+              <div className={styles.subGroupBtnWrap}>
+                <span className={styles.groupLabel}>التجميع:</span>
+                <button
+                  type="button"
+                  className={`${styles.groupBtn} ${subGroupBy === 'list' ? styles.activeGroupBtn : ''}`}
+                  onClick={() => handleGroupByChange('list')}
+                  title="عرض كقائمة"
+                >
+                  قائمة
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.groupBtn} ${subGroupBy === 'task' ? styles.activeGroupBtn : ''}`}
+                  onClick={() => handleGroupByChange('task')}
+                  title="تجميع حسب التاسك"
+                >
+                  حسب التاسك
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.groupBtn} ${subGroupBy === 'student' ? styles.activeGroupBtn : ''}`}
+                  onClick={() => handleGroupByChange('student')}
+                  title="تجميع حسب الطالب"
+                >
+                  حسب الطالب
+                </button>
+              </div>
             </div>
+
+            {/* Status Tabs */}
+            <div className={styles.subTabsContainer}>
+              <button
+                type="button"
+                className={`${styles.subTab} ${subStatusFilter === 'all' ? styles.activeSubTab : ''}`}
+                onClick={() => handleStatusFilterChange('all')}
+              >
+                الكل ({subStats.total})
+              </button>
+              <button
+                type="button"
+                className={`${styles.subTab} ${subStatusFilter === 'pending' ? styles.activeSubTab : ''}`}
+                onClick={() => handleStatusFilterChange('pending')}
+              >
+                <IconClock size={13} />
+                <span>بانتظار التقييم ({subStats.pending})</span>
+              </button>
+              <button
+                type="button"
+                className={`${styles.subTab} ${subStatusFilter === 'graded' ? styles.activeSubTab : ''}`}
+                onClick={() => handleStatusFilterChange('graded')}
+              >
+                <IconCheckCircle size={13} />
+                <span>تم التقييم ({subStats.graded})</span>
+              </button>
+            </div>
+          </div>
+
+          {loading ? <SkeletonList count={3} /> : (
+            <>
+              {filteredSubmissions.length === 0 ? (
+                <EmptyState
+                  icon={IconFileText}
+                  title="لا توجد تسليمات"
+                  description={submissions.length === 0 ? "لم يقم أي طالب بالتسليم بعد." : "لا توجد نتائج مطابقة لخيارات التصفية المختارة."}
+                />
+              ) : subGroupBy === 'list' ? (
+                /* List View */
+                <div className={styles.listGap}>
+                  {filteredSubmissions.map(sub => (
+                    <SubmissionItem key={sub.id} sub={sub} onGrade={handleGradeSubmission} />
+                  ))}
+                </div>
+              ) : (
+                /* Grouped Accordion View (By Task or By Student) */
+                <div className={styles.groupAccordionList}>
+                  {groupedSubmissions.map(group => {
+                    const isExpanded = expandedGroups[group.id] !== false; // expanded by default
+                    const pendingInGroup = group.submissions.filter(s => s.grade === null || s.grade === undefined).length;
+                    const totalInGroup = group.submissions.length;
+
+                    return (
+                      <div key={group.id} className={styles.groupCard}>
+                        <div
+                          className={styles.groupHeader}
+                          onClick={() => toggleGroup(group.id)}
+                        >
+                          <div className={styles.groupTitleWrap}>
+                            <h3 className={styles.groupTitle}>{group.title}</h3>
+                            <span className={styles.groupSubCount}>
+                              {totalInGroup} {totalInGroup === 1 ? 'تسليم' : 'تسليمات'}
+                            </span>
+                            {pendingInGroup > 0 ? (
+                              <Badge variant="warning">
+                                {pendingInGroup} بانتظار التقييم
+                              </Badge>
+                            ) : (
+                              <Badge variant="success">
+                                تم تقييم الكل
+                              </Badge>
+                            )}
+                          </div>
+                          <div className={styles.groupToggleBtn}>
+                            {isExpanded ? <IconChevronUp size={18} /> : <IconChevronDown size={18} />}
+                          </div>
+                        </div>
+
+                        {isExpanded && (
+                          <div className={styles.groupContent}>
+                            <div className={styles.listGap}>
+                              {group.submissions.map(sub => (
+                                <SubmissionItem key={sub.id} sub={sub} onGrade={handleGradeSubmission} />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
